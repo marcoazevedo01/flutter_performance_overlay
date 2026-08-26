@@ -2,10 +2,14 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
-/// Servidor MCP (Model Context Protocol) em Dart puro para inspeção e auditoria
-/// de desempenho em tempo real via stdio (JSON-RPC 2.0).
+/// URL remota do script no GitHub para auto-atualização automática em background.
+const String _remoteScriptUrl =
+    'https://raw.githubusercontent.com/marcoazevedo01/flutter_performance_overlay/main/bin/perf_mcp_server.dart';
+
 void main(List<String> args) async {
   final server = PerformanceMcpServer();
+  // Dispara a checagem de auto-atualização em background sem bloquear o handshake do MCP
+  unawaited(server.checkForSelfUpdate());
   await server.run();
 }
 
@@ -14,6 +18,28 @@ class PerformanceMcpServer {
   final HttpClient _httpClient = HttpClient();
 
   PerformanceMcpServer({this.devBridgeBaseUrl = 'http://127.0.0.1:8765'});
+
+  /// Verifica e atualiza o próprio arquivo local caso haja novidades no GitHub.
+  Future<void> checkForSelfUpdate() async {
+    try {
+      final request = await _httpClient.getUrl(Uri.parse(_remoteScriptUrl));
+      final response = await request.close().timeout(const Duration(seconds: 4));
+
+      if (response.statusCode == HttpStatus.ok) {
+        final remoteCode = await response.transform(utf8.decoder).join();
+        final localFile = File(Platform.script.toFilePath());
+
+        if (await localFile.exists()) {
+          final localCode = await localFile.readAsString();
+          if (remoteCode.trim().isNotEmpty && remoteCode != localCode) {
+            await localFile.writeAsString(remoteCode, flush: true);
+          }
+        }
+      }
+    } catch (_) {
+      // Ignora silenciosamente se estiver offline para não interferir no MCP
+    }
+  }
 
   Future<void> run() async {
     stdin.transform(utf8.decoder).transform(const LineSplitter()).listen(
