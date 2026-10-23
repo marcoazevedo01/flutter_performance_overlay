@@ -63,6 +63,8 @@ void main() {
       expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'Rota'), findsOneWidget);
       expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'Rebuilds'), findsOneWidget);
       expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'Event Loop Freeze'), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'ΔRAM'), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'ΔRota'), findsOneWidget);
 
       // Tap novamente para compactar
       await tester.tap(find.byType(GestureDetector));
@@ -104,6 +106,30 @@ void main() {
       final positionedAfterLeft = tester.widget<Positioned>(find.byType(Positioned));
       expect(positionedAfterLeft.left, greaterThanOrEqualTo(0));
       expect(positionedAfterLeft.top, greaterThanOrEqualTo(0));
+    });
+
+    testWidgets('Renders RAM N/A badge when memoryRssMb is negative (unsupported platform)', (tester) async {
+      final service = PerformanceMonitorService(enableDevBridge: false);
+
+      // Simula métricas com memória indisponível (-1.0)
+      final unsupportedData = PerformanceData.initial().copyWith(
+        memoryRssMb: -1.0,
+      );
+
+      await tester.pumpWidget(
+        buildTestApp(
+          config: const PerformanceOverlayConfig(startExpanded: false),
+          service: service,
+        ),
+      );
+
+      service.onMetricsUpdated?.call(unsupportedData);
+      await tester.pump();
+
+      expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'RAM' && w.value == 'N/A'), findsOneWidget);
+
+      service.stop();
+      await tester.pumpWidget(const SizedBox());
     });
 
     testWidgets('TrackRebuild widget increments rebuild count on rebuilds', (tester) async {

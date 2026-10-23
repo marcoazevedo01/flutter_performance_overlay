@@ -115,15 +115,28 @@ class PerformanceDiagnostics {
     }
 
     // 4. Suspeita de Vazamento de Memória (Memory Leak)
-    if (currentData.deltaMemoryRssMb > 5.0) {
+    if (currentData.memoryRssMb >= 0 && currentData.deltaMemoryRssMb > 5.0) {
       issues.add(
         DiagnosticIssue(
-          title: 'Crescimento Acentuado de Memória (Delta RAM Elevado)',
+          title: 'Crescimento Acentuado de Memória (Taxa ΔRAM Elevada)',
           description:
-              'Aumento repentino de +${currentData.deltaMemoryRssMb.toStringAsFixed(1)}MB na memória RSS (Total: ${currentData.memoryRssMb.toStringAsFixed(1)}MB).',
+              'Taxa de alocação de +${currentData.deltaMemoryRssMb.toStringAsFixed(1)}MB/s na memória (Total: ${currentData.memoryRssMb.toStringAsFixed(1)}MB).',
           severity: DiagnosticSeverity.warning,
           suggestion:
-              'Verifique se Streams, Controllers ou Timers estão sendo cancelados no dispose() ao trocar de tela.',
+              'Verifique carregamento massivo de imagens, buffers ou decodificação síncrona na UI thread.',
+        ),
+      );
+    }
+
+    if (currentData.memoryRssMb >= 0 && currentData.routeDeltaMemoryMb > 15.0) {
+      issues.add(
+        DiagnosticIssue(
+          title: 'Possível Vazamento na Rota Ativa: <${currentData.currentRoute}>',
+          description:
+              'A tela "${currentData.currentRoute}" acumulou +${currentData.routeDeltaMemoryMb.toStringAsFixed(1)}MB desde que foi aberta.',
+          severity: DiagnosticSeverity.warning,
+          suggestion:
+              'Verifique se Streams, Listeners ou Controllers estão sendo liberados no dispose() desta rota.',
         ),
       );
     }

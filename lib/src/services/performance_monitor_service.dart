@@ -1,7 +1,8 @@
 import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
-import 'dart:io' show File, FileMode, ProcessInfo;
+import 'dart:io' show File, FileMode;
+import 'memory_reader/memory_reader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
 
@@ -44,6 +45,11 @@ class PerformanceMonitorService {
 
   double _previousMemoryRssMb = 0.0;
   double _peakMemoryRssMb = 0.0;
+  DateTime? _lastMemorySampleTime;
+  double _decayingDeltaRate = 0.0;
+  String _lastObservedRoute = '';
+  double _memoryOnRouteEntryMb = -1.0;
+  double _routeDeltaMemoryMb = 0.0;
   bool _isRunning = false;
 
   void Function(PerformanceData data)? onMetricsUpdated;
@@ -129,33 +135,55 @@ class PerformanceMonitorService {
   void _computeMetrics() {
     final now = DateTime.now();
 
-    // 1. Memória RAM e Delta RAM
-    double currentMemoryMb = 0.0;
-    double deltaMemoryMb = 0.0;
-    if (!kIsWeb) {
-      try {
-        final memoryBytes = ProcessInfo.currentRss;
-        currentMemoryMb = memoryBytes / (1024 * 1024);
-        if (_previousMemoryRssMb > 0) {
-          deltaMemoryMb = currentMemoryMb - _previousMemoryRssMb;
-        }
-        _previousMemoryRssMb = currentMemoryMb;
-
-        if (currentMemoryMb > _peakMemoryRssMb) {
-          _peakMemoryRssMb = currentMemoryMb;
-        }
-      } catch (_) {}
-    }
-
-    // 2. Rota Atual e Rebuilds
+    // 1. Rota Atual e Rebuilds
     final currentRoute = PerformanceRouteObserver().currentRoute;
     final totalRebuilds = PerformanceRebuildTracker().totalRebuilds;
+
+    // 2. Memória RAM, Taxa ΔRAM e ΔRota
+    final platformMemory = getPlatformMemoryMb();
+    final double currentMemoryMb = platformMemory ?? -1.0;
+    double deltaMemoryMb = 0.0;
+    if (platformMemory != null) {
+      // Rastreamento por rota
+      if (currentRoute != _lastObservedRoute) {
+        _lastObservedRoute = currentRoute;
+        _memoryOnRouteEntryMb = currentMemoryMb;
+        _routeDeltaMemoryMb = 0.0;
+      } else if (_memoryOnRouteEntryMb >= 0) {
+        _routeDeltaMemoryMb = currentMemoryMb - _memoryOnRouteEntryMb;
+      }
+
+      // Cálculo de taxa instantânea (MB/s) com deadband e decaimento
+      if (_previousMemoryRssMb > 0 && _lastMemorySampleTime != null) {
+        final elapsedSec = now.difference(_lastMemorySampleTime!).inMilliseconds / 1000.0;
+        if (elapsedSec > 0) {
+          final rawRate = (currentMemoryMb - _previousMemoryRssMb) / elapsedSec;
+          // ponytail: deadband de 0.1 MB/s para eliminar jitter natural de GC
+          final instantRate = rawRate.abs() < 0.1 ? 0.0 : rawRate;
+
+          if (instantRate.abs() >= _decayingDeltaRate.abs()) {
+            _decayingDeltaRate = instantRate;
+          } else {
+            _decayingDeltaRate *= 0.7;
+            if (_decayingDeltaRate.abs() < 0.05) _decayingDeltaRate = 0.0;
+          }
+          deltaMemoryMb = _decayingDeltaRate;
+        }
+      }
+      _lastMemorySampleTime = now;
+      _previousMemoryRssMb = currentMemoryMb;
+
+      if (currentMemoryMb > _peakMemoryRssMb) {
+        _peakMemoryRssMb = currentMemoryMb;
+      }
+    }
 
     // 3. Se não houver frames registrados ainda
     if (_frameTimings.isEmpty) {
       _lastData = _lastData.copyWith(
         memoryRssMb: currentMemoryMb,
         deltaMemoryRssMb: deltaMemoryMb,
+        routeDeltaMemoryMb: _routeDeltaMemoryMb,
         peakMemoryRssMb: _peakMemoryRssMb,
         eventLoopLagMs: _lagDetector.currentLagMs,
         currentRoute: currentRoute,
@@ -214,6 +242,7 @@ class PerformanceMonitorService {
       worstFrameMs: worstFrameMs,
       memoryRssMb: currentMemoryMb,
       deltaMemoryRssMb: deltaMemoryMb,
+      routeDeltaMemoryMb: _routeDeltaMemoryMb,
       peakMemoryRssMb: _peakMemoryRssMb,
       eventLoopLagMs: _lagDetector.currentLagMs,
       currentRoute: currentRoute,

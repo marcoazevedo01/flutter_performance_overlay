@@ -7,6 +7,25 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [0.1.2] - 2026-10-23
+
+### Adicionado
+- **Suporte a Memória RAM no Flutter Web**:
+  - Extração nativa de `usedJSHeapSize` via JS Interop (`dart:js_interop`) para navegadores Chromium (Chrome, Edge, Brave).
+  - Tratamento elegante com fallback `RAM: N/A` para plataformas ou navegadores que restringem telemetria de heap (Firefox, Safari).
+- **Rastreamento de Memória por Rota Ativa ($\Delta\text{Rota}$)**:
+  - Adicionado o campo `routeDeltaMemoryMb` em `PerformanceData` e flag `showRouteDeltaMemory` em `PerformanceOverlayConfig`.
+  - Badge visual `ΔRota: +X.XMB` no modo expandido do overlay, medindo o acúmulo contínuo de memória desde a navegação na tela.
+  - Alerta de auditoria automática em `PerformanceDiagnostics` para telas que acumulam $> 15.0\text{MB}$ de RAM.
+
+### Modificado
+- **Aprimoramento do $\Delta\text{RAM}$**:
+  - Taxa normalizada em `MB/s` baseada no tempo real decorrido entre leituras.
+  - *Deadband* (zona morta) de $\pm 0.1\text{MB/s}$ para ignorar ruído transitório do Garbage Collector.
+  - Decaimento visual suave que mantém picos transitórios de alocação visíveis por $\sim 1.5\text{s}$ antes de zerar.
+
+---
+
 ## [0.1.1] - 2026-08-25
 
 ### Adicionado

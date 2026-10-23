@@ -15,6 +15,7 @@ void main() {
       expect(data.worstFrameMs, 16.6);
       expect(data.memoryRssMb, 0.0);
       expect(data.deltaMemoryRssMb, 0.0);
+      expect(data.routeDeltaMemoryMb, 0.0);
       expect(data.peakMemoryRssMb, 0.0);
       expect(data.eventLoopLagMs, 0.0);
       expect(data.currentRoute, '/');
@@ -31,6 +32,7 @@ void main() {
         worstFrameMs: 22.1,
         memoryRssMb: 45.678,
         deltaMemoryRssMb: 1.234,
+        routeDeltaMemoryMb: 5.678,
         peakMemoryRssMb: 80.123,
         eventLoopLagMs: 12.34,
         currentRoute: '/detalhes',
@@ -47,6 +49,7 @@ void main() {
       expect(json['worstFrameMs'], 22.1);
       expect(json['memoryRssMb'], 45.68);
       expect(json['deltaMemoryRssMb'], 1.23);
+      expect(json['routeDeltaMemoryMb'], 5.68);
       expect(json['peakMemoryRssMb'], 80.12);
       expect(json['eventLoopLagMs'], 12.3);
       expect(json['currentRoute'], '/detalhes');
@@ -114,6 +117,7 @@ void main() {
       expect(config.showJankRate, true);
       expect(config.showMemory, true);
       expect(config.showDeltaMemory, true);
+      expect(config.showRouteDeltaMemory, true);
       expect(config.showPeakMemory, true);
       expect(config.showEventLoopLag, true);
       expect(config.showCurrentRoute, true);

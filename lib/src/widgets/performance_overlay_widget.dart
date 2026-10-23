@@ -235,8 +235,8 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
           const SizedBox(width: 4),
           MetricBadge(
             label: 'RAM',
-            value: '${data.memoryRssMb.toStringAsFixed(0)}MB',
-            valueColor: const Color(0xFF64B5F6),
+            value: data.memoryRssMb < 0 ? 'N/A' : '${data.memoryRssMb.toStringAsFixed(0)}MB',
+            valueColor: data.memoryRssMb < 0 ? Colors.white38 : const Color(0xFF64B5F6),
             fontSize: cfg.fontSize,
           ),
         ],
@@ -253,7 +253,9 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
   Widget _buildExpandedContent(PerformanceData data) {
     final cfg = widget.config;
     final deltaSign = data.deltaMemoryRssMb >= 0 ? '+' : '';
-    final deltaStr = '$deltaSign${data.deltaMemoryRssMb.toStringAsFixed(1)}MB';
+    final deltaStr = '$deltaSign${data.deltaMemoryRssMb.toStringAsFixed(1)}MB/s';
+    final routeDeltaSign = data.routeDeltaMemoryMb >= 0 ? '+' : '';
+    final routeDeltaStr = '$routeDeltaSign${data.routeDeltaMemoryMb.toStringAsFixed(1)}MB';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -319,33 +321,45 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
             ],
           ),
 
-        // Linha 4: Memória, Delta RAM e Pico
-        if (cfg.showMemory)
+        // Linha 4: Memória, Delta RAM, Delta Rota e Pico
+        if (cfg.showMemory) ...[
           Row(
             mainAxisSize: MainAxisSize.min,
             children: [
               MetricBadge(
                 label: 'RAM',
-                value: '${data.memoryRssMb.toStringAsFixed(1)}MB',
-                valueColor: const Color(0xFF64B5F6),
+                value: data.memoryRssMb < 0 ? 'N/A' : '${data.memoryRssMb.toStringAsFixed(1)}MB',
+                valueColor: data.memoryRssMb < 0 ? Colors.white38 : const Color(0xFF64B5F6),
                 fontSize: cfg.fontSize,
               ),
-              if (cfg.showDeltaMemory)
-                MetricBadge(
-                  label: 'ΔRAM',
-                  value: deltaStr,
-                  valueColor: _getDeltaRamColor(data.deltaMemoryRssMb),
-                  fontSize: cfg.fontSize,
-                ),
-              if (cfg.showPeakMemory)
+              if (cfg.showPeakMemory && data.memoryRssMb >= 0)
                 MetricBadge(
                   label: 'Pico',
                   value: '${data.peakMemoryRssMb.toStringAsFixed(1)}MB',
                   valueColor: const Color(0xFF90CAF9),
                   fontSize: cfg.fontSize,
                 ),
+              ],
+            ),
+            Row(
+              children: [
+              if (cfg.showDeltaMemory && data.memoryRssMb >= 0)
+                MetricBadge(
+                  label: 'ΔRAM',
+                  value: deltaStr,
+                  valueColor: _getDeltaRamColor(data.deltaMemoryRssMb),
+                  fontSize: cfg.fontSize,
+                ),
+              if (cfg.showRouteDeltaMemory && data.memoryRssMb >= 0)
+                MetricBadge(
+                  label: 'ΔRota',
+                  value: routeDeltaStr,
+                  valueColor: _getDeltaRamColor(data.routeDeltaMemoryMb),
+                  fontSize: cfg.fontSize,
+                ),
             ],
-          ),
+            ),
+        ],
 
         // Linha 5: Rota Atual e Rebuilds
         if (cfg.showCurrentRoute || cfg.showRebuildCount)

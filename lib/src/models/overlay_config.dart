@@ -20,6 +20,9 @@ class PerformanceOverlayConfig {
   /// Exibir taxa de variação de memória RAM (Delta RAM).
   final bool showDeltaMemory;
 
+  /// Exibir variação de memória RAM acumulada na rota ativa.
+  final bool showRouteDeltaMemory;
+
   /// Exibir pico máximo de memória atingido na sessão.
   final bool showPeakMemory;
 
@@ -75,6 +78,7 @@ class PerformanceOverlayConfig {
     this.showJankRate = true,
     this.showMemory = true,
     this.showDeltaMemory = true,
+    this.showRouteDeltaMemory = true,
     this.showPeakMemory = true,
     this.showEventLoopLag = true,
     this.showCurrentRoute = true,
@@ -100,6 +104,7 @@ class PerformanceOverlayConfig {
     bool? showJankRate,
     bool? showMemory,
     bool? showDeltaMemory,
+    bool? showRouteDeltaMemory,
     bool? showPeakMemory,
     bool? showEventLoopLag,
     bool? showCurrentRoute,
@@ -124,6 +129,7 @@ class PerformanceOverlayConfig {
       showJankRate: showJankRate ?? this.showJankRate,
       showMemory: showMemory ?? this.showMemory,
       showDeltaMemory: showDeltaMemory ?? this.showDeltaMemory,
+      showRouteDeltaMemory: showRouteDeltaMemory ?? this.showRouteDeltaMemory,
       showPeakMemory: showPeakMemory ?? this.showPeakMemory,
       showEventLoopLag: showEventLoopLag ?? this.showEventLoopLag,
       showCurrentRoute: showCurrentRoute ?? this.showCurrentRoute,
