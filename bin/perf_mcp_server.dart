@@ -202,6 +202,29 @@ class PerformanceMcpServer {
       final body = await response.transform(utf8.decoder).join();
       return body;
     } catch (e) {
+      // ponytail: Fallback para Flutter Web quando HttpServer.bind não está disponível.
+      final fallbackPath = Platform.isWindows
+          ? '${Platform.environment['LOCALAPPDATA']}/mcp/flutter_web_telemetry.json'
+          : '${Platform.environment['HOME']}/.local/share/mcp/flutter_web_telemetry.json';
+      final webDumpFile = File(fallbackPath);
+      if (webDumpFile.existsSync()) {
+        try {
+          final age = DateTime.now().difference(webDumpFile.lastModifiedSync());
+          if (age.inSeconds < 60) {
+            final content = webDumpFile.readAsStringSync();
+            final json = jsonDecode(content);
+            if (endpoint == '/metrics') return content;
+            if (endpoint == '/diagnose' && json is Map<String, dynamic>) {
+              return jsonEncode({
+                'status': 'healthy',
+                'currentMetrics': json,
+                'source': 'web_telemetry_dump',
+              });
+            }
+          }
+        } catch (_) {}
+      }
+
       return jsonEncode({
         'error': 'Não foi possível conectar ao app Flutter em $devBridgeBaseUrl$endpoint.',
         'details': e.toString(),

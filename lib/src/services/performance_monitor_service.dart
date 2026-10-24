@@ -8,9 +8,12 @@ import 'package:flutter/scheduler.dart';
 
 import '../models/performance_data.dart';
 import 'event_loop_lag_detector.dart';
+import 'network_tracker.dart';
 import 'performance_dev_bridge.dart';
+import 'performance_diagnostics.dart';
 import 'rebuild_tracker.dart';
 import 'route_observer.dart';
+import 'telemetry_bridge/telemetry_bridge.dart';
 
 /// Serviço desacoplado para coleta contínua e análise de métricas de desempenho.
 class PerformanceMonitorService {
@@ -50,6 +53,8 @@ class PerformanceMonitorService {
   String _lastObservedRoute = '';
   double _memoryOnRouteEntryMb = -1.0;
   double _routeDeltaMemoryMb = 0.0;
+  DateTime? _routeEnteredAt;
+  double _routeMountDurationMs = 0.0;
   bool _isRunning = false;
 
   void Function(PerformanceData data)? onMetricsUpdated;
@@ -92,6 +97,17 @@ class PerformanceMonitorService {
 
     _uiRefreshTimer = Timer.periodic(refreshInterval, (_) {
       _computeMetrics();
+      final issues = PerformanceDiagnostics.analyze(
+        currentData: _lastData,
+        history: _history,
+        rebuildsByWidget: PerformanceRebuildTracker().rebuildsByWidget,
+      );
+      final exportMap = {
+        ..._lastData.toJson(),
+        'issuesCount': issues.length,
+        'issues': issues.map((e) => e.toJson()).toList(),
+      };
+      WebTelemetryBridge.export(exportMap);
       if (onMetricsUpdated != null) {
         onMetricsUpdated!(_lastData);
       }
@@ -144,13 +160,20 @@ class PerformanceMonitorService {
     final double currentMemoryMb = platformMemory ?? -1.0;
     double deltaMemoryMb = 0.0;
     if (platformMemory != null) {
-      // Rastreamento por rota
+      // Rastreamento por rota e tempo de carga da tela
       if (currentRoute != _lastObservedRoute) {
         _lastObservedRoute = currentRoute;
         _memoryOnRouteEntryMb = currentMemoryMb;
         _routeDeltaMemoryMb = 0.0;
-      } else if (_memoryOnRouteEntryMb >= 0) {
-        _routeDeltaMemoryMb = currentMemoryMb - _memoryOnRouteEntryMb;
+        _routeEnteredAt = now;
+        _routeMountDurationMs = 0.0;
+      } else {
+        if (_memoryOnRouteEntryMb >= 0) {
+          _routeDeltaMemoryMb = currentMemoryMb - _memoryOnRouteEntryMb;
+        }
+        if (_routeEnteredAt != null && _routeMountDurationMs == 0.0) {
+          _routeMountDurationMs = now.difference(_routeEnteredAt!).inMilliseconds.toDouble();
+        }
       }
 
       // Cálculo de taxa instantânea (MB/s) com deadband e decaimento
@@ -247,6 +270,8 @@ class PerformanceMonitorService {
       eventLoopLagMs: _lagDetector.currentLagMs,
       currentRoute: currentRoute,
       rebuildCount: totalRebuilds,
+      httpLatencyMs: PerformanceNetworkTracker().averageLatencyMs,
+      routeMountDurationMs: _routeMountDurationMs,
       timestamp: now,
     );
 

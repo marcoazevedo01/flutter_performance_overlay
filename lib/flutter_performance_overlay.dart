@@ -3,6 +3,7 @@ library;
 export 'src/models/overlay_config.dart';
 export 'src/models/performance_data.dart';
 export 'src/services/event_loop_lag_detector.dart';
+export 'src/services/network_tracker.dart';
 export 'src/services/performance_dev_bridge.dart';
 export 'src/services/performance_diagnostics.dart';
 export 'src/services/performance_monitor_service.dart';

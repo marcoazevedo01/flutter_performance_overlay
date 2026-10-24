@@ -20,6 +20,7 @@ void main() {
       expect(data.eventLoopLagMs, 0.0);
       expect(data.currentRoute, '/');
       expect(data.rebuildCount, 0);
+      expect(data.routeMountDurationMs, 0.0);
     });
 
     test('PerformanceData.toJson() formats all metrics correctly', () {
@@ -54,6 +55,7 @@ void main() {
       expect(json['eventLoopLagMs'], 12.3);
       expect(json['currentRoute'], '/detalhes');
       expect(json['rebuildCount'], 42);
+      expect(json['routeMountDurationMs'], 0.0);
     });
 
     test('PerformanceData.copyWith() updates new metrics properly', () {

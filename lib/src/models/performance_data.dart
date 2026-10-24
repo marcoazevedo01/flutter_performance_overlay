@@ -38,6 +38,12 @@ class PerformanceData {
   /// Total acumulado de rebuilds rastreados em widgets instrumentados.
   final int rebuildCount;
 
+  /// Latência média recente de chamadas de rede/HTTP em milissegundos.
+  final double httpLatencyMs;
+
+  /// Tempo de montagem e estabilização do frame de carga da rota em milissegundos.
+  final double routeMountDurationMs;
+
   /// Carimbo de data/hora do registro da métrica.
   final DateTime timestamp;
 
@@ -55,6 +61,8 @@ class PerformanceData {
     required this.eventLoopLagMs,
     required this.currentRoute,
     required this.rebuildCount,
+    this.httpLatencyMs = 0.0,
+    this.routeMountDurationMs = 0.0,
     required this.timestamp,
   });
 
@@ -72,6 +80,8 @@ class PerformanceData {
         eventLoopLagMs: 0.0,
         currentRoute: '/',
         rebuildCount: 0,
+        httpLatencyMs: 0.0,
+        routeMountDurationMs: 0.0,
         timestamp: DateTime.now(),
       );
 
@@ -90,6 +100,8 @@ class PerformanceData {
         'eventLoopLagMs': double.parse(eventLoopLagMs.toStringAsFixed(1)),
         'currentRoute': currentRoute,
         'rebuildCount': rebuildCount,
+        'httpLatencyMs': double.parse(httpLatencyMs.toStringAsFixed(1)),
+        'routeMountDurationMs': double.parse(routeMountDurationMs.toStringAsFixed(1)),
       };
 
   PerformanceData copyWith({
@@ -106,6 +118,8 @@ class PerformanceData {
     double? eventLoopLagMs,
     String? currentRoute,
     int? rebuildCount,
+    double? httpLatencyMs,
+    double? routeMountDurationMs,
     DateTime? timestamp,
   }) {
     return PerformanceData(
@@ -122,6 +136,8 @@ class PerformanceData {
       eventLoopLagMs: eventLoopLagMs ?? this.eventLoopLagMs,
       currentRoute: currentRoute ?? this.currentRoute,
       rebuildCount: rebuildCount ?? this.rebuildCount,
+      httpLatencyMs: httpLatencyMs ?? this.httpLatencyMs,
+      routeMountDurationMs: routeMountDurationMs ?? this.routeMountDurationMs,
       timestamp: timestamp ?? this.timestamp,
     );
   }

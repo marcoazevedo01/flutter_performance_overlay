@@ -7,6 +7,24 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [0.1.3] - 2026-10-24
+
+### Adicionado
+- **Ponte de Telemetria Web via JS Interop (`window.__flutterPerformanceMetrics`)**:
+  - Exportação contínua de métricas estruturadas e array de problemas (`issues`) no objeto `window` no Flutter Web.
+  - Permite auditoria direta por Puppeteer, Chrome DevTools Protocol e agentes MCP mesmo sob o sandbox do navegador (onde servidores de socket TCP são bloqueados).
+- **Tempo de Montagem de Rotas (`routeMountDurationMs`)**:
+  - Medição do tempo decorrido desde o disparo da navegação até a conclusão da transição e montagem da nova tela.
+  - Integrado em `PerformanceData` e visualizado em relatórios e telemetria.
+- **Helper Global de Acessibilidade Web (`window.__enableFlutterSemantics()`)**:
+  - Função exposta no Chromium para acionar programaticamente a árvore de semântica do Flutter Web (CanvasKit/Skwasm), viabilizando cliques e preenchimentos automatizados de inputs por agentes de IA e testes e2e.
+- **Rastreador de Latência HTTP (`PerformanceNetworkTracker`)**:
+  - Utilitário desacoplado para registrar durações de requisições HTTP e computar latência média com decaimento exponencial (`httpLatencyMs`).
+- **Suavização EMA (Exponential Moving Average) no Heap Web**:
+  - Aplicação de filtro com $\alpha = 0.2$ na leitura de `usedJSHeapSize` para eliminar oscilações abruptas causadas pelos ciclos frequentes de Garbage Collection do navegador.
+
+---
+
 ## [0.1.2] - 2026-10-23
 
 ### Adicionado
