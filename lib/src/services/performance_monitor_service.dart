@@ -55,6 +55,8 @@ class PerformanceMonitorService {
   double _routeDeltaMemoryMb = 0.0;
   DateTime? _routeEnteredAt;
   double _routeMountDurationMs = 0.0;
+  double _worstFrameInCurrentRoute = 0.0;
+  final List<RouteHistoryEntry> _routeHistory = [];
   bool _isRunning = false;
 
   void Function(PerformanceData data)? onMetricsUpdated;
@@ -64,6 +66,9 @@ class PerformanceMonitorService {
 
   /// Histórico imutável de leituras de performance coletadas.
   List<PerformanceData> get history => List.unmodifiable(_history);
+
+  /// Histórico circular das últimas rotas navegadas e suas métricas consolidadas.
+  List<RouteHistoryEntry> get routeHistory => List.unmodifiable(_routeHistory);
 
   PerformanceMonitorService({
     this.windowFrameSize = 60,
@@ -134,9 +139,10 @@ class PerformanceMonitorService {
     _devBridge?.stop();
   }
 
-  /// Limpa o histórico de métricas acumulado.
+  /// Limpa o histórico de métricas acumulado e o histórico de rotas.
   void clearHistory() {
     _history.clear();
+    _routeHistory.clear();
   }
 
   void _onReportTimings(List<FrameTiming> timings) {
@@ -162,11 +168,27 @@ class PerformanceMonitorService {
     if (platformMemory != null) {
       // Rastreamento por rota e tempo de carga da tela
       if (currentRoute != _lastObservedRoute) {
+        if (_lastObservedRoute.isNotEmpty) {
+          // ponytail: mantém buffer circular com as últimas 10 rotas para auditoria sem inflar memória
+          _routeHistory.add(
+            RouteHistoryEntry(
+              route: _lastObservedRoute,
+              mountDurationMs: _routeMountDurationMs,
+              deltaMemoryMb: _routeDeltaMemoryMb,
+              worstFrameMs: _worstFrameInCurrentRoute,
+              timestamp: now,
+            ),
+          );
+          if (_routeHistory.length > 10) {
+            _routeHistory.removeAt(0);
+          }
+        }
         _lastObservedRoute = currentRoute;
         _memoryOnRouteEntryMb = currentMemoryMb;
         _routeDeltaMemoryMb = 0.0;
         _routeEnteredAt = now;
         _routeMountDurationMs = 0.0;
+        _worstFrameInCurrentRoute = 0.0;
       } else {
         if (_memoryOnRouteEntryMb >= 0) {
           _routeDeltaMemoryMb = currentMemoryMb - _memoryOnRouteEntryMb;
@@ -211,6 +233,7 @@ class PerformanceMonitorService {
         eventLoopLagMs: _lagDetector.currentLagMs,
         currentRoute: currentRoute,
         rebuildCount: totalRebuilds,
+        routeHistory: List.unmodifiable(_routeHistory),
         timestamp: now,
       );
       _history.add(_lastData);
@@ -244,6 +267,10 @@ class PerformanceMonitorService {
         worstFrameMs = totalMs;
       }
 
+      if (totalMs > _worstFrameInCurrentRoute) {
+        _worstFrameInCurrentRoute = totalMs;
+      }
+
       if (totalMs > jankThresholdMs) {
         jankCount++;
       }
@@ -272,6 +299,7 @@ class PerformanceMonitorService {
       rebuildCount: totalRebuilds,
       httpLatencyMs: PerformanceNetworkTracker().averageLatencyMs,
       routeMountDurationMs: _routeMountDurationMs,
+      routeHistory: List.unmodifiable(_routeHistory),
       timestamp: now,
     );
 

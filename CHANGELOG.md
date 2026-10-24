@@ -7,6 +7,20 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [0.1.4] - 2026-10-24
+
+### Adicionado
+- **Histórico Circular de Rotas (`routeHistory` / `RouteHistoryEntry`)**:
+  - Buffer circular em memória com as últimas 10 rotas navegadas, retendo para cada tela: `mountDurationMs` (*Time-to-Mount*), `deltaMemoryMb` (variação líquida de RAM), `worstFrameMs` (pior frame de jank registrado durante a permanência) e timestamp.
+  - Exportação serializada em `PerformanceData.toJson()` e no payload global `window.__flutterPerformanceMetrics`.
+- **Cliente HTTP Transparente (`PerformanceHttpClient`)**:
+  - Implementação de `http.BaseClient` que intercepta requisições automaticamente e alimenta o `PerformanceNetworkTracker`.
+  - Método helper estático `PerformanceNetworkTracker.track<T>()` para medição imediata de blocos assíncronos.
+- **Diagnóstico de Risco Crítico de Memória / OOM**:
+  - Nova regra em `PerformanceDiagnostics` que emite alerta de severidade quando o consumo de memória ultrapassa 1.0 GB (ou pico crítico), prevenindo travamentos de abas no navegador.
+
+---
+
 ## [0.1.3] - 2026-10-24
 
 ### Adicionado

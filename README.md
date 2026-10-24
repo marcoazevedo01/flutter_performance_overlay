@@ -15,8 +15,9 @@ Um monitor de desempenho leve, desacoplado, arrastável e expansível para aplic
 - **Memória RAM Multiplataforma (Nativo & Web)**: Uso de memória RSS no SO e heap JS na Web (Chromium via JS Interop com suavização EMA), taxa de alocação ($\Delta\text{RAM}$ em `MB/s`), zona morta anti-ruído de GC e pico da sessão.
 - **Rastreamento de Memória por Rota ($\Delta\text{Rota}$)**: Medição de acúmulo contínuo de memória na tela ativa para detecção imediata de vazamentos (*memory leaks*).
 - **Tempo de Montagem de Rota (Time-to-Mount)**: Medição em milissegundos (`routeMountDurationMs`) do tempo gasto entre a navegação e a montagem da nova tela.
+- **Histórico Circular de Rotas (`routeHistory`)**: Retenção das últimas 10 telas com *Time-to-Mount*, variação de memória e pior frame ocorrido.
 - **Event Loop Lag Detector**: Detecção de congelamentos síncronos da thread principal do Dart (UI Freeze).
-- **Rastreamento de Latência de Rede (HTTP)**: Utilitário `PerformanceNetworkTracker` para auditar a latência média de requisições.
+- **Cliente HTTP e Latência de Rede**: Utilitário `PerformanceHttpClient` e helper `PerformanceNetworkTracker.track()` para auditar requisições automaticamente.
 - **Rastreamento de Rota Ativa**: Integração com `PerformanceRouteObserver` para monitorar a tela ativa.
 - **Contador de Rebuilds**: Auditoria de reconstruções de widgets com `<TrackRebuild id="..." />`.
 - **Clamping de Tela**: O overlay é arrastável e nunca ultrapassa as margens visíveis da tela (`SafeArea`).
@@ -149,6 +150,7 @@ Qualquer script, agente de IA ou automação com Puppeteer/Playwright pode inspe
 const metrics = JSON.parse(window.__flutterPerformanceMetrics);
 console.log(`FPS: ${metrics.fps}, RAM: ${metrics.memoryMb}MB, Rota: ${metrics.currentRoute}`);
 console.log(`Tempo de carga da rota: ${metrics.routeMountDurationMs}ms`);
+console.log(`Histórico das últimas rotas:`, metrics.routeHistory);
 console.log(`Diagnósticos e gargalos:`, metrics.issues);
 ```
 
@@ -158,10 +160,17 @@ No Flutter Web com CanvasKit, inputs e botões não existem no DOM HTML até que
 window.__enableFlutterSemantics();
 ```
 
-### 3. Rastreamento de Latência de Rede (HTTP)
-Para registrar o tempo de resposta de chamadas REST ou GraphQL no monitor de performance:
+### 3. Rastreamento Automático de Latência de Rede (HTTP)
+Use o `PerformanceHttpClient` (wrapper de `http.BaseClient`) ou o helper estático `PerformanceNetworkTracker.track`:
 ```dart
-PerformanceNetworkTracker.instance.recordDuration(elapsedDuration);
+// 1. Usando o cliente HTTP transparente:
+final client = PerformanceHttpClient();
+final response = await client.get(Uri.parse('https://api.meusite.com/dados'));
+
+// 2. Ou medindo qualquer bloco assíncrono isolado:
+final dados = await PerformanceNetworkTracker.track(() async {
+  return await meuServico.buscarDados();
+});
 ```
 
 ---

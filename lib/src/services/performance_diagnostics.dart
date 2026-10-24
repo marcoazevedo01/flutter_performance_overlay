@@ -141,6 +141,21 @@ class PerformanceDiagnostics {
       );
     }
 
+    if (currentData.memoryRssMb > 1000.0) {
+      issues.add(
+        DiagnosticIssue(
+          title: 'Consumo Elevado de Memória (Risco de OOM)',
+          description:
+              'Memória atual em ${currentData.memoryRssMb.toStringAsFixed(1)}MB (Pico: ${currentData.peakMemoryRssMb.toStringAsFixed(1)}MB). Limite de 1.0GB ultrapassado.',
+          severity: currentData.memoryRssMb > 1400.0
+              ? DiagnosticSeverity.critical
+              : DiagnosticSeverity.warning,
+          suggestion:
+              'Verifique se coleções pesadas, imagens ou buffers estão sendo mantidos em memória após sair de rotas.',
+        ),
+      );
+    }
+
     // 5. Hotspots de Rebuilds
     final rebuilds = rebuildsByWidget ?? PerformanceRebuildTracker().rebuildsByWidget;
     for (final entry in rebuilds.entries) {

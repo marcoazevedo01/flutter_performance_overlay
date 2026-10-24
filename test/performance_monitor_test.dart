@@ -21,6 +21,7 @@ void main() {
       expect(data.currentRoute, '/');
       expect(data.rebuildCount, 0);
       expect(data.routeMountDurationMs, 0.0);
+      expect(data.routeHistory, isEmpty);
     });
 
     test('PerformanceData.toJson() formats all metrics correctly', () {
@@ -56,6 +57,39 @@ void main() {
       expect(json['currentRoute'], '/detalhes');
       expect(json['rebuildCount'], 42);
       expect(json['routeMountDurationMs'], 0.0);
+      expect(json['routeHistory'], isEmpty);
+    });
+
+    test('RouteHistoryEntry formats properly to JSON', () {
+      final entry = RouteHistoryEntry(
+        route: '/produtos',
+        mountDurationMs: 450.5,
+        deltaMemoryMb: 12.34,
+        worstFrameMs: 28.5,
+        timestamp: DateTime(2026, 10, 24, 14, 0, 0),
+      );
+
+      final json = entry.toJson();
+      expect(json['route'], '/produtos');
+      expect(json['mountDurationMs'], 450.5);
+      expect(json['deltaMemoryMb'], 12.34);
+      expect(json['worstFrameMs'], 28.5);
+    });
+
+    test('PerformanceDiagnostics alerts on critical memory (> 1000MB)', () {
+      final data = PerformanceData.initial().copyWith(
+        memoryRssMb: 1200.0,
+        peakMemoryRssMb: 1500.0,
+      );
+
+      final issues = PerformanceDiagnostics.analyze(
+        currentData: data,
+        history: [data],
+      );
+
+      final oomIssue = issues.firstWhere((i) => i.title.contains('Risco de OOM'));
+      expect(oomIssue.severity, DiagnosticSeverity.warning);
+      expect(oomIssue.description.contains('1200.0MB'), true);
     });
 
     test('PerformanceData.copyWith() updates new metrics properly', () {

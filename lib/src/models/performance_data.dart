@@ -1,3 +1,28 @@
+/// Registro histórico de métricas consolidadas em uma rota navegada.
+class RouteHistoryEntry {
+  final String route;
+  final double mountDurationMs;
+  final double deltaMemoryMb;
+  final double worstFrameMs;
+  final DateTime timestamp;
+
+  const RouteHistoryEntry({
+    required this.route,
+    required this.mountDurationMs,
+    required this.deltaMemoryMb,
+    required this.worstFrameMs,
+    required this.timestamp,
+  });
+
+  Map<String, dynamic> toJson() => {
+        'route': route,
+        'mountDurationMs': double.parse(mountDurationMs.toStringAsFixed(1)),
+        'deltaMemoryMb': double.parse(deltaMemoryMb.toStringAsFixed(2)),
+        'worstFrameMs': double.parse(worstFrameMs.toStringAsFixed(1)),
+        'timestamp': timestamp.toIso8601String(),
+      };
+}
+
 class PerformanceData {
   /// Taxa de quadros por segundo instantânea calculada a partir do último frame.
   final double currentFps;
@@ -44,6 +69,9 @@ class PerformanceData {
   /// Tempo de montagem e estabilização do frame de carga da rota em milissegundos.
   final double routeMountDurationMs;
 
+  /// Histórico recente das últimas rotas navegadas com suas respectivas métricas consolidadas.
+  final List<RouteHistoryEntry> routeHistory;
+
   /// Carimbo de data/hora do registro da métrica.
   final DateTime timestamp;
 
@@ -63,6 +91,7 @@ class PerformanceData {
     required this.rebuildCount,
     this.httpLatencyMs = 0.0,
     this.routeMountDurationMs = 0.0,
+    this.routeHistory = const [],
     required this.timestamp,
   });
 
@@ -82,6 +111,7 @@ class PerformanceData {
         rebuildCount: 0,
         httpLatencyMs: 0.0,
         routeMountDurationMs: 0.0,
+        routeHistory: const [],
         timestamp: DateTime.now(),
       );
 
@@ -102,6 +132,7 @@ class PerformanceData {
         'rebuildCount': rebuildCount,
         'httpLatencyMs': double.parse(httpLatencyMs.toStringAsFixed(1)),
         'routeMountDurationMs': double.parse(routeMountDurationMs.toStringAsFixed(1)),
+        'routeHistory': routeHistory.map((r) => r.toJson()).toList(),
       };
 
   PerformanceData copyWith({
@@ -120,6 +151,7 @@ class PerformanceData {
     int? rebuildCount,
     double? httpLatencyMs,
     double? routeMountDurationMs,
+    List<RouteHistoryEntry>? routeHistory,
     DateTime? timestamp,
   }) {
     return PerformanceData(
@@ -138,6 +170,7 @@ class PerformanceData {
       rebuildCount: rebuildCount ?? this.rebuildCount,
       httpLatencyMs: httpLatencyMs ?? this.httpLatencyMs,
       routeMountDurationMs: routeMountDurationMs ?? this.routeMountDurationMs,
+      routeHistory: routeHistory ?? this.routeHistory,
       timestamp: timestamp ?? this.timestamp,
     );
   }
