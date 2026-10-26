@@ -11,6 +11,7 @@ import 'event_loop_lag_detector.dart';
 import 'network_tracker.dart';
 import 'performance_dev_bridge.dart';
 import 'performance_diagnostics.dart';
+import 'performance_service_extensions.dart';
 import 'rebuild_tracker.dart';
 import 'route_observer.dart';
 import 'telemetry_bridge/telemetry_bridge.dart';
@@ -35,6 +36,9 @@ class PerformanceMonitorService {
   /// Se deve habilitar o servidor HTTP local (DevBridge) para integração com agentes de IA (MCP).
   final bool enableDevBridge;
 
+  /// Se deve registrar extensões nativas no Dart VM Service (MCP, DTD e DevTools).
+  final bool enableServiceExtensions;
+
   /// Porta para o servidor local DevBridge.
   final int devBridgePort;
 
@@ -45,6 +49,7 @@ class PerformanceMonitorService {
   Timer? _uiRefreshTimer;
   late final EventLoopLagDetector _lagDetector;
   PerformanceDevBridge? _devBridge;
+  PerformanceServiceExtensions? _serviceExtensions;
 
   double _previousMemoryRssMb = 0.0;
   double _peakMemoryRssMb = 0.0;
@@ -70,6 +75,9 @@ class PerformanceMonitorService {
   /// Histórico circular das últimas rotas navegadas e suas métricas consolidadas.
   List<RouteHistoryEntry> get routeHistory => List.unmodifiable(_routeHistory);
 
+  /// Extensões nativas registradas na Dart VM Service (se habilitado).
+  PerformanceServiceExtensions? get serviceExtensions => _serviceExtensions;
+
   PerformanceMonitorService({
     this.windowFrameSize = 60,
     this.refreshInterval = const Duration(milliseconds: 500),
@@ -77,6 +85,7 @@ class PerformanceMonitorService {
     this.exportFilePath,
     this.jankThresholdMs = 16.6,
     this.enableDevBridge = true,
+    this.enableServiceExtensions = true,
     this.devBridgePort = 8765,
   }) {
     _lagDetector = EventLoopLagDetector(
@@ -89,9 +98,15 @@ class PerformanceMonitorService {
         monitorService: this,
       );
     }
+
+    if (enableServiceExtensions && !kIsWeb) {
+      _serviceExtensions = PerformanceServiceExtensions(
+        monitorService: this,
+      );
+    }
   }
 
-  /// Inicia a coleta de métricas, o DevBridge e os timers periódicos.
+  /// Inicia a coleta de métricas, o DevBridge, extensões de serviço e os timers periódicos.
   void start() {
     if (_isRunning) return;
     _isRunning = true;
@@ -99,6 +114,7 @@ class PerformanceMonitorService {
     SchedulerBinding.instance.addTimingsCallback(_onReportTimings);
     _lagDetector.start();
     _devBridge?.start();
+    _serviceExtensions?.register();
 
     _uiRefreshTimer = Timer.periodic(refreshInterval, (_) {
       _computeMetrics();
@@ -326,6 +342,7 @@ class PerformanceMonitorService {
     stop();
     _frameTimings.clear();
     _history.clear();
+    _serviceExtensions?.unregister();
     _devBridge?.dispose();
   }
 }

@@ -22,7 +22,8 @@ Um monitor de desempenho leve, desacoplado, arrastável e expansível para aplic
 - **Contador de Rebuilds**: Auditoria de reconstruções de widgets com `<TrackRebuild id="..." />`.
 - **Clamping de Tela**: O overlay é arrastável e nunca ultrapassa as margens visíveis da tela (`SafeArea`).
 - **Ponte Web & Automação com Agentes**: Exportação para `window.__flutterPerformanceMetrics` e ativador de acessibilidade CanvasKit `window.__enableFlutterSemantics()`.
-- **Integração com Agentes de IA (MCP)**: Expõe um mini-servidor local e ferramentas MCP para que assistentes (Antigravity, Cursor, Claude) inspecionem e diagnostiquem o app em tempo real.
+- **Dart VM Service Extensions (`ext.flutter_performance.*`)**: Registro nativo de métodos RPC na VM Dart para integração direta com Dart Tooling Daemon (DTD), Flutter DevTools e Dart MCP Server sem abrir portas de rede locais.
+- **Integração com Agentes de IA (MCP)**: Expõe tanto extensões nativas da VM quanto mini-servidor local HTTP para que assistentes (Antigravity, Cursor, Claude) inspecionem e diagnostiquem o app em tempo real.
 
 ---
 
@@ -99,9 +100,29 @@ TrackRebuild(
 
 ## 🤖 Conectando com Agentes de IA via MCP (Model Context Protocol)
 
-O pacote inclui um servidor MCP embutido com **auto-atualização transparente**.
+A biblioteca oferece duas formas complementares de integração com ferramentas de desenvolvimento e Agentes de IA:
 
-### 1. Baixe o Servidor MCP na sua máquina:
+### 1. Conexão Nativa via Dart VM Service (Recomendada)
+
+Ao iniciar o app com a biblioteca em modo debug/profile, ela registra automaticamente métodos RPC nativos no **Dart VM Service**:
+
+| Método RPC | Descrição |
+| :--- | :--- |
+| `ext.flutter_performance.getMetrics` | Snapshot em tempo real com FPS, tempos de UI/Raster, RAM RSS/Heap, rota e rebuilds. |
+| `ext.flutter_performance.getHistory` | Histórico sequencial de medições para análise de tendências de desempenho. |
+| `ext.flutter_performance.getRebuilds` | Contagem total e distribuição detalhada de rebuilds por widget. |
+| `ext.flutter_performance.diagnose` | Auditoria em tempo real pelo algoritmo de diagnóstico com anomalias classificadas. |
+| `ext.flutter_performance.reset` | Zera acumuladores de histórico e contadores de rebuilds. |
+
+Esses métodos podem ser invocados diretamente pelo **Dart Tooling Daemon (DTD)**, extensões do Flutter DevTools ou por agentes conectados ao **`dart mcp-server`** sem necessidade de abrir portas TCP locais nem de configurar túneis `adb forward`.
+
+---
+
+### 2. Servidor MCP Standalone via Stdio (`perf_mcp_server.dart`)
+
+Para clientes MCP de desktop (Claude Desktop, Cursor, Antigravity) que utilizam servidores stdio dedicados comunicando via HTTP local (porta 8765):
+
+#### Passo A: Baixe o Servidor MCP na sua máquina:
 
 * **Windows (PowerShell):**
   ```powershell
@@ -115,7 +136,7 @@ O pacote inclui um servidor MCP embutido com **auto-atualização transparente**
   curl -sSL https://raw.githubusercontent.com/marcoazevedo01/flutter_performance_overlay/main/bin/perf_mcp_server.dart -o ~/.local/share/mcp/perf_mcp_server.dart
   ```
 
-### 2. Adicione ao seu arquivo `mcp_config.json`:
+#### Passo B: Adicione ao seu arquivo `mcp_config.json`:
 
 ```json
 {
@@ -128,7 +149,7 @@ O pacote inclui um servidor MCP embutido com **auto-atualização transparente**
 }
 ```
 
-### 🧰 Ferramentas MCP Disponíveis para o Agente:
+#### 🧰 Ferramentas MCP Disponíveis no Servidor Standalone:
 
 | Ferramenta MCP | O que ela faz |
 | :--- | :--- |

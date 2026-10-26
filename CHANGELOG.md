@@ -7,6 +7,18 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [0.1.5] - 2026-10-24
+
+### Adicionado
+- **Dart VM Service Extensions (`PerformanceServiceExtensions`)**:
+  - Registro de extensões RPC nativas na VM Dart (`ext.flutter_performance.getMetrics`, `ext.flutter_performance.getHistory`, `ext.flutter_performance.getRebuilds`, `ext.flutter_performance.diagnose`, `ext.flutter_performance.reset`).
+  - Habilita integração direta com o ecossistema Dart/Flutter MCP (`dart mcp-server`), Dart Tooling Daemon (DTD) e Flutter DevTools sem dependência obrigatória de portas de rede TCP locais ou redirecionamentos `adb forward`.
+  - Despachante estático centralizado com proteção contra registros duplicados no Isolate e ciclo de vida atrelado a `PerformanceMonitorService`.
+- **Parâmetro `enableServiceExtensions` em `PerformanceMonitorService`**:
+  - Flag para habilitar ou desabilitar o registro das rotas na Dart VM Service (padrão: `true`).
+
+---
+
 ## [0.1.4] - 2026-10-24
 
 ### Adicionado
