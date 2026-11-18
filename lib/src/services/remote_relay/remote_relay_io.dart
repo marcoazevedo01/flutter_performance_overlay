@@ -5,27 +5,71 @@ import 'dart:io';
 import '../performance_monitor_service.dart';
 import 'remote_relay_protocol.dart';
 
-/// Cliente WebSocket nativo (IO) passivo para receber comandos start/stop do servidor configurado.
+/// Cliente WebSocket nativo (IO) para relay remoto (modo passivo ou painel inspector).
 class PerformanceRemoteRelay {
   final String relayUrl;
   final String? relayKey;
-  final PerformanceMonitorService monitorService;
+  final PerformanceMonitorService? monitorService;
+  final bool isInspector;
+  final void Function(List<Map<String, dynamic>> instances)? onInstancesUpdated;
+  final void Function(Map<String, dynamic> chunkEvent)? onChunkReceived;
 
   WebSocket? _socket;
   StreamSubscription<dynamic>? _subscription;
   Timer? _reconnectTimer;
   bool _disposed = false;
   bool _connecting = false;
+  bool _hasPendingList = false;
+  String? _pendingListAuthToken;
 
   PerformanceRemoteRelay({
     required this.relayUrl,
     this.relayKey,
-    required this.monitorService,
+    this.monitorService,
+    this.isInspector = false,
+    this.onInstancesUpdated,
+    this.onChunkReceived,
   });
+
+  bool get isConnected => _socket != null && _socket!.readyState == WebSocket.open;
 
   void connect() {
     if (_disposed || _connecting || _socket != null) return;
     unawaited(_tryConnect());
+  }
+
+  void requestInstances({String? authToken}) {
+    if (!isInspector) return;
+    if (!isConnected) {
+      _hasPendingList = true;
+      _pendingListAuthToken = authToken;
+      connect();
+      return;
+    }
+    _send({'type': 'list', 'authToken': authToken});
+  }
+
+  void startInstance(
+    String targetInstanceId, {
+    String? authToken,
+    int intervalSec = 3,
+  }) {
+    if (!isInspector) return;
+    _send({
+      'type': 'start_target',
+      'targetInstanceId': targetInstanceId,
+      'intervalSec': intervalSec,
+      'authToken': authToken,
+    });
+  }
+
+  void stopInstance(String targetInstanceId, {String? authToken}) {
+    if (!isInspector) return;
+    _send({
+      'type': 'stop_target',
+      'targetInstanceId': targetInstanceId,
+      'authToken': authToken,
+    });
   }
 
   Future<void> _tryConnect() async {
@@ -44,10 +88,22 @@ class PerformanceRemoteRelay {
       }
 
       _socket = ws;
-      _send(RemoteRelayProtocol.buildRegisterPayload(monitorService));
+      if (!isInspector && monitorService != null) {
+        _send(RemoteRelayProtocol.buildRegisterPayload(monitorService!));
+      } else if (isInspector && _hasPendingList) {
+        _hasPendingList = false;
+        _send({'type': 'list', 'authToken': _pendingListAuthToken});
+      }
 
       _subscription = ws.listen(
-        (raw) => RemoteRelayProtocol.handleMessage(raw, monitorService, _send),
+        (raw) => RemoteRelayProtocol.handleMessage(
+          raw: raw,
+          monitor: monitorService,
+          isInspector: isInspector,
+          sendJson: _send,
+          onInstancesUpdated: onInstancesUpdated,
+          onChunkReceived: onChunkReceived,
+        ),
         onDone: _onDisconnected,
         onError: (_) => _onDisconnected(),
         cancelOnError: true,

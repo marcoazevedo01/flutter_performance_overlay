@@ -10,6 +10,7 @@ export 'src/services/performance_diagnostics.dart';
 export 'src/services/performance_service_extensions.dart';
 export 'src/services/performance_monitor_service.dart';
 export 'src/services/rebuild_tracker.dart';
+export 'src/services/remote_relay/remote_relay.dart';
 export 'src/services/route_observer.dart';
 export 'src/widgets/metric_badge.dart';
 export 'src/widgets/performance_overlay_widget.dart';

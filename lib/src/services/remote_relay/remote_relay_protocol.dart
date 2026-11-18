@@ -2,7 +2,7 @@ import 'dart:convert';
 
 import '../performance_monitor_service.dart';
 
-/// Utilitários compartilhados de protocolo para o cliente passivo de telemetria remota.
+/// Utilitários compartilhados de protocolo para o cliente passivo e o modo inspector do relay remoto.
 abstract final class RemoteRelayProtocol {
   static Uri buildUri(String relayUrl, String? relayKey) {
     final uri = Uri.parse(relayUrl);
@@ -36,16 +36,35 @@ abstract final class RemoteRelayProtocol {
         'chunk': chunk,
       };
 
-  static void handleMessage(
-    dynamic raw,
-    PerformanceMonitorService monitor,
-    void Function(Map<String, dynamic> payload) sendJson,
-  ) {
+  static void handleMessage({
+    required dynamic raw,
+    PerformanceMonitorService? monitor,
+    required bool isInspector,
+    required void Function(Map<String, dynamic> payload) sendJson,
+    void Function(List<Map<String, dynamic>> instances)? onInstancesUpdated,
+    void Function(Map<String, dynamic> chunkEvent)? onChunkReceived,
+  }) {
     if (raw is! String) return;
     try {
-      final data = jsonDecode(raw);
-      if (data is! Map) return;
+      final decoded = jsonDecode(raw);
+      if (decoded is! Map) return;
+      final data = Map<String, dynamic>.from(decoded);
       final type = data['type'];
+
+      if (isInspector) {
+        if (type == 'instances' && data['list'] is List) {
+          final list = (data['list'] as List)
+              .whereType<Map>()
+              .map((e) => Map<String, dynamic>.from(e))
+              .toList();
+          onInstancesUpdated?.call(list);
+        } else if (type == 'chunk') {
+          onChunkReceived?.call(data);
+        }
+        return;
+      }
+
+      if (monitor == null) return;
       if (type == 'start') {
         final requesterId = data['requesterId'];
         final intervalSec = ((data['intervalSec'] as num?)?.toInt() ?? 3).clamp(1, 30);

@@ -9,25 +9,72 @@ import 'remote_relay_protocol.dart';
 @JS('WebSocket')
 external JSFunction get _webSocketConstructor;
 
-/// Cliente WebSocket nativo (Browser JS Interop) passivo para receber comandos start/stop.
+/// Cliente WebSocket nativo (Browser JS Interop) para relay remoto (modo passivo ou inspector).
 class PerformanceRemoteRelay {
   final String relayUrl;
   final String? relayKey;
-  final PerformanceMonitorService monitorService;
+  final PerformanceMonitorService? monitorService;
+  final bool isInspector;
+  final void Function(List<Map<String, dynamic>> instances)? onInstancesUpdated;
+  final void Function(Map<String, dynamic> chunkEvent)? onChunkReceived;
 
   JSObject? _socket;
   Timer? _reconnectTimer;
   bool _disposed = false;
+  bool _hasPendingList = false;
+  String? _pendingListAuthToken;
 
   PerformanceRemoteRelay({
     required this.relayUrl,
     this.relayKey,
-    required this.monitorService,
+    this.monitorService,
+    this.isInspector = false,
+    this.onInstancesUpdated,
+    this.onChunkReceived,
   });
+
+  bool get isConnected {
+    final state = _socket?['readyState']?.dartify();
+    return state is num && state.toInt() == 1;
+  }
 
   void connect() {
     if (_disposed || _socket != null) return;
     _tryConnect();
+  }
+
+  void requestInstances({String? authToken}) {
+    if (!isInspector) return;
+    if (!isConnected) {
+      _hasPendingList = true;
+      _pendingListAuthToken = authToken;
+      connect();
+      return;
+    }
+    _send({'type': 'list', 'authToken': authToken});
+  }
+
+  void startInstance(
+    String targetInstanceId, {
+    String? authToken,
+    int intervalSec = 3,
+  }) {
+    if (!isInspector) return;
+    _send({
+      'type': 'start_target',
+      'targetInstanceId': targetInstanceId,
+      'intervalSec': intervalSec,
+      'authToken': authToken,
+    });
+  }
+
+  void stopInstance(String targetInstanceId, {String? authToken}) {
+    if (!isInspector) return;
+    _send({
+      'type': 'stop_target',
+      'targetInstanceId': targetInstanceId,
+      'authToken': authToken,
+    });
   }
 
   void _tryConnect() {
@@ -39,14 +86,26 @@ class PerformanceRemoteRelay {
 
       ws['onopen'] = ((JSAny? _) {
         if (_disposed) return;
-        _send(RemoteRelayProtocol.buildRegisterPayload(monitorService));
+        if (!isInspector && monitorService != null) {
+          _send(RemoteRelayProtocol.buildRegisterPayload(monitorService!));
+        } else if (isInspector && _hasPendingList) {
+          _hasPendingList = false;
+          _send({'type': 'list', 'authToken': _pendingListAuthToken});
+        }
       }).toJS;
 
       ws['onmessage'] = ((JSObject event) {
         if (_disposed) return;
         final data = event['data']?.dartify();
         if (data is String) {
-          RemoteRelayProtocol.handleMessage(data, monitorService, _send);
+          RemoteRelayProtocol.handleMessage(
+            raw: data,
+            monitor: monitorService,
+            isInspector: isInspector,
+            sendJson: _send,
+            onInstancesUpdated: onInstancesUpdated,
+            onChunkReceived: onChunkReceived,
+          );
         }
       }).toJS;
 
