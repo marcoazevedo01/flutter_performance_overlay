@@ -65,11 +65,31 @@ class PerformanceMonitorService {
   /// Chave de autenticação opcional para o relay remoto.
   final String? remoteRelayKey;
 
-  String get effectiveAppName =>
-      (appName != 'FlutterApp' && appName.isNotEmpty) ? appName : getPlatformAppName();
+  String? _detectedAppName;
+  String? _detectedAppVersion;
+  String? _detectedUserName;
+  String? _dynamicUserName;
+  String? _dynamicAppVersion;
+  bool _disposed = false;
+
+  String get effectiveAppName => (appName != 'FlutterApp' && appName.isNotEmpty)
+      ? appName
+      : (_detectedAppName ?? getPlatformAppName());
 
   String get effectiveDeviceName =>
       (deviceName != null && deviceName!.isNotEmpty) ? deviceName! : getPlatformDeviceName();
+
+  String get effectiveAppVersion {
+    final custom = _dynamicAppVersion ?? appVersion;
+    if (custom != null && custom.isNotEmpty) return custom;
+    return _detectedAppVersion ?? '1.0.0';
+  }
+
+  String? get effectiveUserName {
+    final custom = _dynamicUserName ?? userName;
+    if (custom != null && custom.trim().isNotEmpty) return custom.trim();
+    return _detectedUserName;
+  }
 
   final Queue<FrameTiming> _frameTimings = Queue<FrameTiming>();
   final List<PerformanceData> _history = [];
@@ -166,6 +186,51 @@ class PerformanceMonitorService {
         relayKey: remoteRelayKey,
         monitorService: this,
       )..connect();
+    }
+
+    unawaited(_detectPlatformMetadata());
+  }
+
+  Future<void> _detectPlatformMetadata() async {
+    final meta = await getPlatformAppMetadata();
+    if (_disposed) return;
+
+    bool changed = false;
+    final name = meta['appName'];
+    final ver = meta['appVersion'];
+    final user = meta['userName'];
+
+    if (name != null && name.isNotEmpty && _detectedAppName != name) {
+      _detectedAppName = name;
+      changed = true;
+    }
+    if (ver != null && ver.isNotEmpty && _detectedAppVersion != ver) {
+      _detectedAppVersion = ver;
+      changed = true;
+    }
+    if (user != null && user.isNotEmpty && _detectedUserName != user) {
+      _detectedUserName = user;
+      changed = true;
+    }
+
+    if (changed) {
+      _remoteRelay?.refreshRegistration();
+    }
+  }
+
+  /// Atualiza metadados dinâmicos (ex: usuário após login) e reenvia registro ao relay.
+  void updateMetadata({String? userName, String? appVersion}) {
+    bool changed = false;
+    if (userName != null && userName != _dynamicUserName) {
+      _dynamicUserName = userName;
+      changed = true;
+    }
+    if (appVersion != null && appVersion != _dynamicAppVersion) {
+      _dynamicAppVersion = appVersion;
+      changed = true;
+    }
+    if (changed) {
+      _remoteRelay?.refreshRegistration();
     }
   }
 
@@ -588,6 +653,7 @@ class PerformanceMonitorService {
 
   /// Limpa recursos e remove os callbacks do Flutter engine.
   void dispose() {
+    _disposed = true;
     stop();
     _frameTimings.clear();
     _history.clear();

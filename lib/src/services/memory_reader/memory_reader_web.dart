@@ -1,4 +1,8 @@
+import 'dart:convert';
 import 'dart:js_interop';
+
+import 'package:flutter/services.dart';
+import 'package:http/http.dart' as http;
 
 @JS('document.title')
 external String? get _documentTitle;
@@ -48,6 +52,52 @@ String getPlatformAppName() {
 
 /// Identifica a plataforma como navegador Web.
 String getPlatformDeviceName() => 'Web Browser';
+
+/// Detecta automaticamente appName e appVersion no Flutter Web via version.json ou package_info.
+Future<Map<String, String?>> getPlatformAppMetadata() async {
+  String? appName;
+  String? appVersion;
+
+  try {
+    final resp = await http
+        .get(Uri.base.resolve('version.json'))
+        .timeout(const Duration(seconds: 3));
+    if (resp.statusCode == 200) {
+      final json = jsonDecode(resp.body);
+      if (json is Map) {
+        final name = json['app_name']?.toString().trim();
+        final ver = json['version']?.toString().trim();
+        final build = json['build_number']?.toString().trim();
+        if (name != null && name.isNotEmpty) appName = name;
+        if (ver != null && ver.isNotEmpty) {
+          appVersion = (build != null && build.isNotEmpty) ? '$ver+$build' : ver;
+        }
+      }
+    }
+  } catch (_) {}
+
+  if (appVersion == null) {
+    try {
+      const channel = MethodChannel('dev.fluttercommunity.plus/package_info');
+      final info = await channel.invokeMapMethod<String, dynamic>('getAll');
+      if (info != null) {
+        final name = info['appName']?.toString().trim();
+        final ver = info['version']?.toString().trim();
+        final build = info['buildNumber']?.toString().trim();
+        if (appName == null && name != null && name.isNotEmpty) appName = name;
+        if (ver != null && ver.isNotEmpty) {
+          appVersion = (build != null && build.isNotEmpty) ? '$ver+$build' : ver;
+        }
+      }
+    } catch (_) {}
+  }
+
+  return {
+    'appName': appName,
+    'appVersion': appVersion,
+    'userName': null,
+  };
+}
 
 /// Obtém ou define o baseline inicial de memória no objeto global `window` (sobrevive ao Hot Restart do DDC).
 double getOrSetProcessBaselineMemoryMb(double currentMb) {

@@ -179,9 +179,9 @@ class PerformanceDevBridge {
             'uptimeSeconds': uptime,
             'instanceId': monitorService.instanceId,
             'appName': monitorService.effectiveAppName,
-            'userName': monitorService.userName,
+            'userName': monitorService.effectiveUserName,
             'device': monitorService.effectiveDeviceName,
-            'version': monitorService.appVersion ?? '1.0.0',
+            'version': monitorService.effectiveAppVersion,
             'appRoute': monitorService.lastData.currentRoute,
             'isStreaming': monitorService.isStreaming,
           });

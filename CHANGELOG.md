@@ -7,6 +7,16 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [0.1.8] - 2026-11-18
+
+### Adicionado
+- **Auto-detecção Automática de Versão, App e Usuário na Lib**:
+  - Leitura automática de `version.json`, `MethodChannel` (`package_info_plus` quando presente), `pubspec.yaml` em dev e usuário do SO (`USERNAME`/`USER`), com método `updateMetadata()` e sincronização no `PerformanceOverlayWidget.didUpdateWidget`.
+- **Detecção de Quedas e Status de Reconexão (`RelayConnectionStatus`)**:
+  - Callback `onStatusChanged` no `PerformanceRemoteRelay` (`disconnected`, `connecting`, `connected`, `reconnecting`) e método `refreshRegistration()` para atualizar metadados em tempo real.
+
+---
+
 ## [0.1.7] - 2026-11-18
 
 ### Adicionado

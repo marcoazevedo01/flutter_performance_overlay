@@ -9,6 +9,9 @@ String getPlatformAppName() => 'FlutterApp';
 /// Retorna o nome padrão do dispositivo para plataformas não mapeadas.
 String getPlatformDeviceName() => 'Unknown';
 
+/// Detecta metadados opcionais (appName, appVersion, userName) da plataforma.
+Future<Map<String, String?>> getPlatformAppMetadata() async => const {};
+
 /// Obtém ou define o baseline inicial de memória do processo atual (sobrevive a Hot Restart).
 double getOrSetProcessBaselineMemoryMb(double currentMb) {
   return _stubBaselineMb ??= currentMb;

@@ -1,4 +1,7 @@
+import 'dart:convert';
 import 'dart:io' show Directory, File, Platform, ProcessInfo, pid;
+
+import 'package:flutter/services.dart';
 
 double? _cachedBaselineMb;
 
@@ -35,6 +38,79 @@ String getPlatformDeviceName() {
   } catch (_) {
     return 'Native';
   }
+}
+
+/// Detecta automaticamente appName, appVersion e userName do processo/SO sem dependências extras.
+Future<Map<String, String?>> getPlatformAppMetadata() async {
+  String? appName;
+  String? appVersion;
+  String? userName;
+
+  try {
+    final envUser = Platform.environment['USERNAME'] ?? Platform.environment['USER'];
+    if (envUser != null && envUser.trim().isNotEmpty) {
+      userName = envUser.trim();
+    }
+  } catch (_) {}
+
+  // 1. Tenta ler version.json do bundle nativo (Flutter Desktop release/profile/debug)
+  try {
+    final exeDir = File(Platform.resolvedExecutable).parent.path;
+    final versionFile = File('$exeDir/data/flutter_assets/version.json');
+    if (await versionFile.exists()) {
+      final json = jsonDecode(await versionFile.readAsString());
+      if (json is Map) {
+        final name = json['app_name']?.toString().trim();
+        final ver = json['version']?.toString().trim();
+        final build = json['build_number']?.toString().trim();
+        if (name != null && name.isNotEmpty) appName = name;
+        if (ver != null && ver.isNotEmpty) {
+          appVersion = (build != null && build.isNotEmpty) ? '$ver+$build' : ver;
+        }
+      }
+    }
+  } catch (_) {}
+
+  // 2. Fallback para Android/iOS/macOS via canal padrão do package_info_plus (se presente no app)
+  if (appVersion == null) {
+    try {
+      const channel = MethodChannel('dev.fluttercommunity.plus/package_info');
+      final info = await channel.invokeMapMethod<String, dynamic>('getAll');
+      if (info != null) {
+        final name = info['appName']?.toString().trim();
+        final ver = info['version']?.toString().trim();
+        final build = info['buildNumber']?.toString().trim();
+        if (appName == null && name != null && name.isNotEmpty) appName = name;
+        if (ver != null && ver.isNotEmpty) {
+          appVersion = (build != null && build.isNotEmpty) ? '$ver+$build' : ver;
+        }
+      }
+    } catch (_) {}
+  }
+
+  // 3. Fallback em desenvolvimento lendo pubspec.yaml local
+  if (appVersion == null) {
+    try {
+      final pubspec = File('${Directory.current.path}/pubspec.yaml');
+      if (await pubspec.exists()) {
+        final text = await pubspec.readAsString();
+        final nameMatch = RegExp(r'^name:\s*(.+)$', multiLine: true).firstMatch(text);
+        final verMatch = RegExp(r'^version:\s*(.+)$', multiLine: true).firstMatch(text);
+        if (appName == null && nameMatch != null) {
+          appName = nameMatch.group(1)?.trim();
+        }
+        if (verMatch != null) {
+          appVersion = verMatch.group(1)?.trim();
+        }
+      }
+    } catch (_) {}
+  }
+
+  return {
+    'appName': appName,
+    'appVersion': appVersion,
+    'userName': userName,
+  };
 }
 
 /// ponytail: Persiste o baseline inicial no temp por PID para sobreviver ao Hot Restart

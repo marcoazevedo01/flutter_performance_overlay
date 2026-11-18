@@ -13,14 +13,17 @@ class PerformanceRemoteRelay {
   final bool isInspector;
   final void Function(List<Map<String, dynamic>> instances)? onInstancesUpdated;
   final void Function(Map<String, dynamic> chunkEvent)? onChunkReceived;
+  final void Function(RelayConnectionStatus status)? onStatusChanged;
 
   WebSocket? _socket;
   StreamSubscription<dynamic>? _subscription;
   Timer? _reconnectTimer;
   bool _disposed = false;
   bool _connecting = false;
+  bool _hasConnectedBefore = false;
   bool _hasPendingList = false;
   String? _pendingListAuthToken;
+  RelayConnectionStatus _status = RelayConnectionStatus.disconnected;
 
   PerformanceRemoteRelay({
     required this.relayUrl,
@@ -29,13 +32,27 @@ class PerformanceRemoteRelay {
     this.isInspector = false,
     this.onInstancesUpdated,
     this.onChunkReceived,
+    this.onStatusChanged,
   });
 
   bool get isConnected => _socket != null && _socket!.readyState == WebSocket.open;
+  RelayConnectionStatus get status => _status;
+
+  void _setStatus(RelayConnectionStatus next) {
+    if (_status == next) return;
+    _status = next;
+    onStatusChanged?.call(next);
+  }
 
   void connect() {
     if (_disposed || _connecting || _socket != null) return;
     unawaited(_tryConnect());
+  }
+
+  void refreshRegistration() {
+    if (!isInspector && isConnected && monitorService != null) {
+      _send(RemoteRelayProtocol.buildRegisterPayload(monitorService!));
+    }
   }
 
   void requestInstances({String? authToken}) {
@@ -75,6 +92,11 @@ class PerformanceRemoteRelay {
   Future<void> _tryConnect() async {
     if (_disposed || _connecting) return;
     _connecting = true;
+    _setStatus(
+      _hasConnectedBefore
+          ? RelayConnectionStatus.reconnecting
+          : RelayConnectionStatus.connecting,
+    );
     try {
       final uri = RemoteRelayProtocol.buildUri(relayUrl, relayKey);
       final headers = (relayKey != null && relayKey!.isNotEmpty)
@@ -88,6 +110,9 @@ class PerformanceRemoteRelay {
       }
 
       _socket = ws;
+      _hasConnectedBefore = true;
+      _setStatus(RelayConnectionStatus.connected);
+
       if (!isInspector && monitorService != null) {
         _send(RemoteRelayProtocol.buildRegisterPayload(monitorService!));
       } else if (isInspector && _hasPendingList) {
@@ -132,9 +157,14 @@ class PerformanceRemoteRelay {
 
   void _scheduleReconnect() {
     if (_disposed) return;
+    _setStatus(
+      _hasConnectedBefore
+          ? RelayConnectionStatus.reconnecting
+          : RelayConnectionStatus.disconnected,
+    );
     _reconnectTimer?.cancel();
-    // ponytail: backoff fixo simples de 8s para reconexão passiva
-    _reconnectTimer = Timer(const Duration(seconds: 8), _tryConnect);
+    // ponytail: backoff curto de 5s para recuperação ágil de oscilações
+    _reconnectTimer = Timer(const Duration(seconds: 5), _tryConnect);
   }
 
   void dispose() {
@@ -147,5 +177,6 @@ class PerformanceRemoteRelay {
       _socket?.close();
     } catch (_) {}
     _socket = null;
+    _setStatus(RelayConnectionStatus.disconnected);
   }
 }

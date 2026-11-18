@@ -2,6 +2,9 @@ import 'dart:convert';
 
 import '../performance_monitor_service.dart';
 
+/// Estado atual da conexão com o servidor de relay remoto.
+enum RelayConnectionStatus { disconnected, connecting, connected, reconnecting }
+
 /// Utilitários compartilhados de protocolo para o cliente passivo e o modo inspector do relay remoto.
 abstract final class RemoteRelayProtocol {
   static Uri buildUri(String relayUrl, String? relayKey) {
@@ -16,9 +19,9 @@ abstract final class RemoteRelayProtocol {
         'type': 'register',
         'instanceId': monitor.instanceId,
         'appName': monitor.effectiveAppName,
-        'userName': monitor.userName,
+        'userName': monitor.effectiveUserName,
         'device': monitor.effectiveDeviceName,
-        'version': monitor.appVersion ?? '1.0.0',
+        'version': monitor.effectiveAppVersion,
       };
 
   static Map<String, dynamic> buildChunkPayload(
@@ -32,7 +35,7 @@ abstract final class RemoteRelayProtocol {
         'instanceId': monitor.instanceId,
         'appName': monitor.effectiveAppName,
         'device': monitor.effectiveDeviceName,
-        'version': monitor.appVersion ?? '1.0.0',
+        'version': monitor.effectiveAppVersion,
         'chunk': chunk,
       };
 

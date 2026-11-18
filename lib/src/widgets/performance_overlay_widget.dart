@@ -83,6 +83,13 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
         _service.stop();
       }
     }
+    if (widget.config.userName != oldWidget.config.userName ||
+        widget.config.appVersion != oldWidget.config.appVersion) {
+      _service.updateMetadata(
+        userName: widget.config.userName,
+        appVersion: widget.config.appVersion,
+      );
+    }
   }
 
   @override

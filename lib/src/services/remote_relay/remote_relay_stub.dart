@@ -1,4 +1,5 @@
 import '../performance_monitor_service.dart';
+import 'remote_relay_protocol.dart';
 
 /// Implementação stub do cliente de relay remoto (modo passivo ou inspector).
 class PerformanceRemoteRelay {
@@ -8,6 +9,7 @@ class PerformanceRemoteRelay {
   final bool isInspector;
   final void Function(List<Map<String, dynamic>> instances)? onInstancesUpdated;
   final void Function(Map<String, dynamic> chunkEvent)? onChunkReceived;
+  final void Function(RelayConnectionStatus status)? onStatusChanged;
 
   PerformanceRemoteRelay({
     required this.relayUrl,
@@ -16,11 +18,15 @@ class PerformanceRemoteRelay {
     this.isInspector = false,
     this.onInstancesUpdated,
     this.onChunkReceived,
+    this.onStatusChanged,
   });
 
   bool get isConnected => false;
+  RelayConnectionStatus get status => RelayConnectionStatus.disconnected;
 
   void connect() {}
+
+  void refreshRegistration() {}
 
   void requestInstances({String? authToken}) {}
 
