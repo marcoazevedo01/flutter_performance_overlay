@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:collection';
 import 'dart:convert';
 import 'dart:io' show File, FileMode;
+import 'dart:ui' show ErrorCallback, PlatformDispatcher;
 import 'memory_reader/memory_reader.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/scheduler.dart';
@@ -47,9 +48,21 @@ class PerformanceMonitorService {
 
   Timer? _exportTimer;
   Timer? _uiRefreshTimer;
+  Timer? _streamTimer;
   late final EventLoopLagDetector _lagDetector;
   PerformanceDevBridge? _devBridge;
   PerformanceServiceExtensions? _serviceExtensions;
+
+  bool _startedByStreaming = false;
+  bool _hooksInstalled = false;
+  bool _logsHooked = false;
+  bool _errorsHooked = false;
+  DebugPrintCallback? _originalDebugPrint;
+  FlutterExceptionHandler? _originalFlutterError;
+  ErrorCallback? _originalPlatformError;
+  final List<PerformanceData> _pendingSamples = [];
+  final List<Map<String, dynamic>> _capturedLogs = [];
+  final List<Map<String, dynamic>> _capturedErrors = [];
 
   double _previousMemoryRssMb = 0.0;
   double _peakMemoryRssMb = 0.0;
@@ -63,6 +76,9 @@ class PerformanceMonitorService {
   double _worstFrameInCurrentRoute = 0.0;
   final List<RouteHistoryEntry> _routeHistory = [];
   bool _isRunning = false;
+
+  /// Indica se há uma sessão de streaming remoto ativa.
+  bool get isStreaming => _streamTimer != null;
 
   void Function(PerformanceData data)? onMetricsUpdated;
 
@@ -146,6 +162,11 @@ class PerformanceMonitorService {
     if (!_isRunning) return;
     _isRunning = false;
 
+    _streamTimer?.cancel();
+    _streamTimer = null;
+    _startedByStreaming = false;
+    _restoreHooks();
+
     SchedulerBinding.instance.removeTimingsCallback(_onReportTimings);
     _uiRefreshTimer?.cancel();
     _uiRefreshTimer = null;
@@ -153,6 +174,51 @@ class PerformanceMonitorService {
     _exportTimer = null;
     _lagDetector.stop();
     _devBridge?.stop();
+  }
+
+  /// Inicia o streaming contínuo de métricas, diagnósticos, logs e erros em background.
+  void startStreaming({
+    Duration interval = const Duration(seconds: 5),
+    bool captureLogs = true,
+    bool captureErrors = true,
+    required void Function(Map<String, dynamic> chunk) onChunk,
+  }) {
+    if (isStreaming) {
+      _streamTimer?.cancel();
+      _streamTimer = null;
+      _restoreHooks();
+    }
+
+    _pendingSamples.clear();
+    _capturedLogs.clear();
+    _capturedErrors.clear();
+
+    if (!_isRunning) {
+      _startedByStreaming = true;
+      start();
+    }
+
+    _installHooks(captureLogs: captureLogs, captureErrors: captureErrors);
+
+    _streamTimer = Timer.periodic(interval, (_) {
+      onChunk(_buildAndDrainChunk());
+    });
+  }
+
+  /// Encerra o streaming contínuo, restaura handlers originais e retorna o último lote coletado.
+  Map<String, dynamic> stopStreaming() {
+    _streamTimer?.cancel();
+    _streamTimer = null;
+    _restoreHooks();
+
+    final finalChunk = _buildAndDrainChunk();
+
+    if (_startedByStreaming) {
+      _startedByStreaming = false;
+      stop();
+    }
+
+    return finalChunk;
   }
 
   /// Limpa o histórico de métricas acumulado e o histórico de rotas.
@@ -252,7 +318,7 @@ class PerformanceMonitorService {
         routeHistory: List.unmodifiable(_routeHistory),
         timestamp: now,
       );
-      _history.add(_lastData);
+      _recordSample(_lastData);
       return;
     }
 
@@ -319,10 +385,129 @@ class PerformanceMonitorService {
       timestamp: now,
     );
 
-    _history.add(_lastData);
+    _recordSample(_lastData);
+  }
+
+  void _recordSample(PerformanceData data) {
+    _history.add(data);
     if (_history.length > 200) {
       _history.removeAt(0);
     }
+
+    if (isStreaming) {
+      _pendingSamples.add(data);
+      // ponytail: limite de 120 amostras por lote para proteger memória
+      if (_pendingSamples.length > 120) {
+        _pendingSamples.removeAt(0);
+      }
+    }
+  }
+
+  void _installHooks({required bool captureLogs, required bool captureErrors}) {
+    if (_hooksInstalled) {
+      _restoreHooks();
+    }
+
+    if (captureLogs) {
+      _originalDebugPrint = debugPrint;
+      _logsHooked = true;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        if (message != null) {
+          // ponytail: limite de 200 logs por chunk para evitar OOM
+          if (_capturedLogs.length >= 200) {
+            _capturedLogs.removeAt(0);
+          }
+          _capturedLogs.add({
+            'timestamp': DateTime.now().toIso8601String(),
+            'route': PerformanceRouteObserver().currentRoute,
+            'message': message,
+          });
+        }
+        _originalDebugPrint?.call(message, wrapWidth: wrapWidth);
+      };
+    }
+
+    if (captureErrors) {
+      _originalFlutterError = FlutterError.onError;
+      _originalPlatformError = PlatformDispatcher.instance.onError;
+      _errorsHooked = true;
+
+      FlutterError.onError = (FlutterErrorDetails details) {
+        _appendError(
+          details.exceptionAsString(),
+          details.stack?.toString() ?? '',
+        );
+        _originalFlutterError?.call(details);
+      };
+
+      PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
+        _appendError(error.toString(), stack.toString());
+        return _originalPlatformError?.call(error, stack) ?? false;
+      };
+    }
+
+    _hooksInstalled = _logsHooked || _errorsHooked;
+  }
+
+  void _appendError(String error, String stackTrace) {
+    // ponytail: limite de 50 erros por chunk para evitar OOM
+    if (_capturedErrors.length >= 50) {
+      _capturedErrors.removeAt(0);
+    }
+    _capturedErrors.add({
+      'timestamp': DateTime.now().toIso8601String(),
+      'route': PerformanceRouteObserver().currentRoute,
+      'error': error,
+      'stackTrace': stackTrace,
+    });
+  }
+
+  void _restoreHooks() {
+    if (!_hooksInstalled) return;
+
+    if (_logsHooked) {
+      debugPrint = _originalDebugPrint!;
+      _originalDebugPrint = null;
+      _logsHooked = false;
+    }
+
+    if (_errorsHooked) {
+      FlutterError.onError = _originalFlutterError;
+      PlatformDispatcher.instance.onError = _originalPlatformError;
+      _originalFlutterError = null;
+      _originalPlatformError = null;
+      _errorsHooked = false;
+    }
+
+    _hooksInstalled = false;
+  }
+
+  Map<String, dynamic> _buildAndDrainChunk() {
+    if (_pendingSamples.isEmpty) {
+      _computeMetrics();
+      if (_pendingSamples.isEmpty) {
+        _pendingSamples.add(_lastData);
+      }
+    }
+
+    final chunk = <String, dynamic>{
+      'timestamp': DateTime.now().toIso8601String(),
+      'currentMetrics': _lastData.toJson(),
+      'samples': _pendingSamples.map((e) => e.toJson()).toList(),
+      'diagnostics': PerformanceDiagnostics.analyze(
+        currentData: _lastData,
+        history: _history,
+      ).map((e) => e.toJson()).toList(),
+      'rebuilds': PerformanceRebuildTracker().rebuildsByWidget,
+      'logs': List<Map<String, dynamic>>.from(_capturedLogs),
+      'errors': List<Map<String, dynamic>>.from(_capturedErrors),
+    };
+
+    _pendingSamples.clear();
+    _capturedLogs.clear();
+    _capturedErrors.clear();
+
+    return chunk;
   }
 
   Future<void> _exportMetricsToFile() async {

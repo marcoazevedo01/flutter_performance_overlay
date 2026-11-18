@@ -7,6 +7,18 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [Unreleased]
+
+### Adicionado
+- **Streaming Remoto Contínuo em Modo Headless (`startStreaming` / `stopStreaming`)**:
+  - Controle sob demanda no `PerformanceMonitorService` para iniciar e encerrar coleta de telemetria em background sem exibir o overlay visual na tela do usuário.
+  - Emissão periódica de lotes JSON (`onChunk`) contendo `currentMetrics`, `samples` acumuladas no intervalo, `diagnostics`, `rebuilds`, `logs` e `errors`, com drenagem automática de buffers entre lotes e limites de segurança em memória.
+  - Interceptação encadeada e reversível de `debugPrint`, `FlutterError.onError` e `PlatformDispatcher.instance.onError`, mantendo os handlers originais do app intactos após o encerramento.
+- **Proteção de Sessão Headless no `PerformanceOverlayWidget`**:
+  - Ocultar o overlay (`enabled: false`) não interrompe mais uma sessão de streaming remoto em andamento (`isStreaming`).
+
+---
+
 ## [0.1.5] - 2026-10-24
 
 ### Adicionado

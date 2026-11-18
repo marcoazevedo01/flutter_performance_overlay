@@ -1,3 +1,6 @@
+import 'dart:async';
+
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_performance_overlay/flutter_performance_overlay.dart';
 
@@ -162,6 +165,118 @@ void main() {
       expect(config.startExpanded, false);
       expect(config.goodFpsThreshold, 55.0);
       expect(config.warningFpsThreshold, 30.0);
+    });
+  });
+
+  group('Remote Streaming & Log/Error Capture Tests', () {
+    test('startStreaming captures logs, errors, and samples, drains between chunks, and restores handlers on stopStreaming', () async {
+      final originalDebugPrint = debugPrint;
+      final originalFlutterError = FlutterError.onError;
+      final originalPlatformError = PlatformDispatcher.instance.onError;
+
+      final List<String?> forwardedLogs = [];
+      final List<FlutterErrorDetails> forwardedErrors = [];
+
+      debugPrint = (String? message, {int? wrapWidth}) {
+        forwardedLogs.add(message);
+      };
+      FlutterError.onError = (FlutterErrorDetails details) {
+        forwardedErrors.add(details);
+      };
+
+      final stubDebugPrint = debugPrint;
+      final stubFlutterError = FlutterError.onError;
+
+      final service = PerformanceMonitorService(
+        enableDevBridge: false,
+        refreshInterval: const Duration(milliseconds: 20),
+      );
+
+      addTearDown(() {
+        service.dispose();
+        debugPrint = originalDebugPrint;
+        FlutterError.onError = originalFlutterError;
+        PlatformDispatcher.instance.onError = originalPlatformError;
+      });
+
+      final chunks = <Map<String, dynamic>>[];
+      final twoChunksCompleter = Completer<void>();
+
+      service.startStreaming(
+        interval: const Duration(milliseconds: 40),
+        captureLogs: true,
+        captureErrors: true,
+        onChunk: (chunk) {
+          chunks.add(chunk);
+          if (chunks.length >= 2 && !twoChunksCompleter.isCompleted) {
+            twoChunksCompleter.complete();
+          }
+        },
+      );
+
+      expect(service.isStreaming, isTrue);
+
+      debugPrint('Log de teste 1');
+      FlutterError.reportError(
+        FlutterErrorDetails(exception: StateError('Erro de teste 1')),
+      );
+
+      await twoChunksCompleter.future.timeout(const Duration(seconds: 2));
+
+      expect(chunks.length, greaterThanOrEqualTo(2));
+
+      final firstChunk = chunks[0];
+      expect(firstChunk['timestamp'], isA<String>());
+      expect(firstChunk['currentMetrics'], isA<Map<String, dynamic>>());
+      expect(firstChunk['samples'], isA<List>());
+      expect((firstChunk['samples'] as List), isNotEmpty);
+      expect(firstChunk['diagnostics'], isA<List>());
+      expect(firstChunk['rebuilds'], isA<Map<String, dynamic>>());
+
+      final firstLogs = firstChunk['logs'] as List;
+      final firstErrors = firstChunk['errors'] as List;
+      expect(
+        firstLogs.any((l) => (l as Map)['message'] == 'Log de teste 1'),
+        isTrue,
+      );
+      expect(
+        firstErrors.any((e) => (e as Map)['error'].toString().contains('Erro de teste 1')),
+        isTrue,
+      );
+      expect(forwardedLogs, contains('Log de teste 1'));
+      expect(
+        forwardedErrors.any((d) => d.exception.toString().contains('Erro de teste 1')),
+        isTrue,
+      );
+
+      // Segundo chunk deve ter logs e erros drenados (vazios)
+      final secondChunk = chunks[1];
+      expect((secondChunk['logs'] as List), isEmpty);
+      expect((secondChunk['errors'] as List), isEmpty);
+
+      // Dupla chamada de startStreaming não deve criar loop nem perder referência original
+      final secondStreamChunks = <Map<String, dynamic>>[];
+      service.startStreaming(
+        interval: const Duration(milliseconds: 50),
+        captureLogs: true,
+        captureErrors: true,
+        onChunk: secondStreamChunks.add,
+      );
+
+      debugPrint('Log apos reinicio');
+      expect(forwardedLogs.where((m) => m == 'Log apos reinicio').length, 1);
+
+      final finalChunk = service.stopStreaming();
+      expect(service.isStreaming, isFalse);
+      expect(
+        (finalChunk['logs'] as List).any((l) => (l as Map)['message'] == 'Log apos reinicio'),
+        isTrue,
+      );
+
+      // Handlers restaurados exatamente para as referências originais
+      expect(identical(debugPrint, stubDebugPrint), isTrue);
+      expect(identical(FlutterError.onError, stubFlutterError), isTrue);
+      expect(identical(PlatformDispatcher.instance.onError, originalPlatformError), isTrue);
     });
   });
 }

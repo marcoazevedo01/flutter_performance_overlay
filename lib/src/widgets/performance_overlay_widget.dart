@@ -53,10 +53,11 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
 
     _dataNotifier = ValueNotifier<PerformanceData>(_service.lastData);
 
+    _service.onMetricsUpdated = (data) {
+      _dataNotifier.value = data;
+    };
+
     if (widget.config.enabled) {
-      _service.onMetricsUpdated = (data) {
-        _dataNotifier.value = data;
-      };
       _service.start();
     }
 
@@ -69,7 +70,7 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
     if (widget.config.enabled != oldWidget.config.enabled) {
       if (widget.config.enabled) {
         _service.start();
-      } else {
+      } else if (!_service.isStreaming) {
         _service.stop();
       }
     }

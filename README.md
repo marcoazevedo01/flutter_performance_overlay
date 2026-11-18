@@ -23,6 +23,7 @@ Um monitor de desempenho leve, desacoplado, arrastável e expansível para aplic
 - **Clamping de Tela**: O overlay é arrastável e nunca ultrapassa as margens visíveis da tela (`SafeArea`).
 - **Ponte Web & Automação com Agentes**: Exportação para `window.__flutterPerformanceMetrics` e ativador de acessibilidade CanvasKit `window.__enableFlutterSemantics()`.
 - **Dart VM Service Extensions (`ext.flutter_performance.*`)**: Registro nativo de métodos RPC na VM Dart para integração direta com Dart Tooling Daemon (DTD), Flutter DevTools e Dart MCP Server sem abrir portas de rede locais.
+- **Streaming Remoto Contínuo (Headless)**: Ativação e desativação sob demanda (`startStreaming` / `stopStreaming`) para capturar métricas, diagnósticos, `debugPrint` e exceções não tratadas em tempo real sem exibir o overlay visual ao usuário.
 - **Integração com Agentes de IA (MCP)**: Expõe tanto extensões nativas da VM quanto mini-servidor local HTTP para que assistentes (Antigravity, Cursor, Claude) inspecionem e diagnostiquem o app em tempo real.
 
 ---
@@ -94,6 +95,29 @@ TrackRebuild(
   id: 'MeuCardDePedido',
   child: MeuWidgetPesado(),
 )
+```
+
+### 3. Streaming Remoto Contínuo (Headless + Logs/Erros)
+
+Para capturar métricas, diagnósticos, `debugPrint` e exceções de um usuário em produção sob demanda (acionado por Push, WebSocket ou Feature Flag) sem exibir o overlay na tela:
+
+```dart
+final monitorService = PerformanceMonitorService(enableDevBridge: false);
+
+// 1. Ativar remotamente em tempo real
+monitorService.startStreaming(
+  interval: const Duration(seconds: 5),
+  captureLogs: true,
+  captureErrors: true,
+  onChunk: (Map<String, dynamic> chunk) {
+    // Contém: timestamp, currentMetrics, samples, diagnostics, rebuilds, logs, errors
+    minhaApi.enviarTelemetria(chunk);
+  },
+);
+
+// 2. Desativar remotamente quando desejar (restaura debugPrint/handlers originais)
+final finalChunk = monitorService.stopStreaming();
+minhaApi.enviarTelemetria(finalChunk);
 ```
 
 ---
