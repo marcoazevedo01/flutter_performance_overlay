@@ -13,6 +13,7 @@ Um monitor de desempenho leve, desacoplado, arrastável e expansível para aplic
 - **UI Build Time vs Raster / GPU Time**: Identificação rápida de gargalos na thread do Dart vs desenho na GPU.
 - **Jank Rate & Worst Frame**: Contagem e percentual de frames perdidos (> 16.6ms) e duração do pior frame recente.
 - **Memória RAM Multiplataforma (Nativo & Web)**: Uso de memória RSS no SO e heap JS na Web (Chromium via JS Interop com suavização EMA), taxa de alocação ($\Delta\text{RAM}$ em `MB/s`), zona morta anti-ruído de GC e pico da sessão.
+- **Delta de Memória da Sessão ($\Delta\text{Sessão}$ / `sessionDeltaMemoryMb`)**: Baseline persistente do processo (por `pid` em IO e `window.__fpoBaselineMemoryMb` na Web) que sobrevive ao *Hot Restart*, exibindo o badge `ΔSessão` no painel expandido e emitindo alerta automático em `PerformanceDiagnostics` quando o acúmulo ultrapassa `30MB` (`> 100MB` crítico).
 - **Rastreamento de Memória por Rota ($\Delta\text{Rota}$)**: Medição de acúmulo contínuo de memória na tela ativa para detecção imediata de vazamentos (*memory leaks*).
 - **Tempo de Montagem de Rota (Time-to-Mount)**: Medição em milissegundos (`routeMountDurationMs`) do tempo gasto entre a navegação e a montagem da nova tela.
 - **Histórico Circular de Rotas (`routeHistory`)**: Retenção das últimas 10 telas com *Time-to-Mount*, variação de memória e pior frame ocorrido.

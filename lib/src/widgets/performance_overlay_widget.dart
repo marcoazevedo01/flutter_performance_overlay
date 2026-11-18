@@ -257,6 +257,8 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
     final deltaStr = '$deltaSign${data.deltaMemoryRssMb.toStringAsFixed(1)}MB/s';
     final routeDeltaSign = data.routeDeltaMemoryMb >= 0 ? '+' : '';
     final routeDeltaStr = '$routeDeltaSign${data.routeDeltaMemoryMb.toStringAsFixed(1)}MB';
+    final sessionDeltaSign = data.sessionDeltaMemoryMb >= 0 ? '+' : '';
+    final sessionDeltaStr = '$sessionDeltaSign${data.sessionDeltaMemoryMb.toStringAsFixed(1)}MB';
 
     return Column(
       crossAxisAlignment: CrossAxisAlignment.start,
@@ -356,6 +358,13 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
                   label: 'ΔRota',
                   value: routeDeltaStr,
                   valueColor: _getDeltaRamColor(data.routeDeltaMemoryMb),
+                  fontSize: cfg.fontSize,
+                ),
+              if (cfg.showDeltaMemory && data.memoryRssMb >= 0)
+                MetricBadge(
+                  label: 'ΔSessão',
+                  value: sessionDeltaStr,
+                  valueColor: _getDeltaRamColor(data.sessionDeltaMemoryMb),
                   fontSize: cfg.fontSize,
                 ),
             ],

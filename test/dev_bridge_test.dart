@@ -70,6 +70,7 @@ void main() {
         memoryRssMb: 120.0,
         deltaMemoryRssMb: 8.5,
         routeDeltaMemoryMb: 20.0,
+        sessionDeltaMemoryMb: 35.0,
         peakMemoryRssMb: 120.0,
         eventLoopLagMs: 0.0,
         currentRoute: '/relatorio',
@@ -85,6 +86,7 @@ void main() {
 
       expect(issues.any((i) => i.title.contains('Crescimento Acentuado de Memória')), isTrue);
       expect(issues.any((i) => i.title.contains('Possível Vazamento na Rota Ativa: </relatorio>')), isTrue);
+      expect(issues.any((i) => i.title.contains('Acúmulo Contínuo de Memória na Sessão')), isTrue);
       expect(issues.any((i) => i.title.contains('Hotspot de Reconstrução: <HeavyListItem>')), isTrue);
     });
   });

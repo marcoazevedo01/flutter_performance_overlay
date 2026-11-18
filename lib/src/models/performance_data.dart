@@ -51,6 +51,9 @@ class PerformanceData {
   /// Variação de memória RAM acumulada desde a entrada na rota ativa em Megabytes.
   final double routeDeltaMemoryMb;
 
+  /// Variação de memória RAM acumulada desde o início do processo (sobrevive ao Hot Restart) em Megabytes.
+  final double sessionDeltaMemoryMb;
+
   /// Pico máximo de memória RSS registrado durante a execução da sessão.
   final double peakMemoryRssMb;
 
@@ -85,6 +88,7 @@ class PerformanceData {
     required this.memoryRssMb,
     required this.deltaMemoryRssMb,
     this.routeDeltaMemoryMb = 0.0,
+    this.sessionDeltaMemoryMb = 0.0,
     required this.peakMemoryRssMb,
     required this.eventLoopLagMs,
     required this.currentRoute,
@@ -105,6 +109,7 @@ class PerformanceData {
         memoryRssMb: 0.0,
         deltaMemoryRssMb: 0.0,
         routeDeltaMemoryMb: 0.0,
+        sessionDeltaMemoryMb: 0.0,
         peakMemoryRssMb: 0.0,
         eventLoopLagMs: 0.0,
         currentRoute: '/',
@@ -126,6 +131,7 @@ class PerformanceData {
         'memoryRssMb': double.parse(memoryRssMb.toStringAsFixed(2)),
         'deltaMemoryRssMb': double.parse(deltaMemoryRssMb.toStringAsFixed(2)),
         'routeDeltaMemoryMb': double.parse(routeDeltaMemoryMb.toStringAsFixed(2)),
+        'sessionDeltaMemoryMb': double.parse(sessionDeltaMemoryMb.toStringAsFixed(2)),
         'peakMemoryRssMb': double.parse(peakMemoryRssMb.toStringAsFixed(2)),
         'eventLoopLagMs': double.parse(eventLoopLagMs.toStringAsFixed(1)),
         'currentRoute': currentRoute,
@@ -145,6 +151,7 @@ class PerformanceData {
     double? memoryRssMb,
     double? deltaMemoryRssMb,
     double? routeDeltaMemoryMb,
+    double? sessionDeltaMemoryMb,
     double? peakMemoryRssMb,
     double? eventLoopLagMs,
     String? currentRoute,
@@ -164,6 +171,7 @@ class PerformanceData {
       memoryRssMb: memoryRssMb ?? this.memoryRssMb,
       deltaMemoryRssMb: deltaMemoryRssMb ?? this.deltaMemoryRssMb,
       routeDeltaMemoryMb: routeDeltaMemoryMb ?? this.routeDeltaMemoryMb,
+      sessionDeltaMemoryMb: sessionDeltaMemoryMb ?? this.sessionDeltaMemoryMb,
       peakMemoryRssMb: peakMemoryRssMb ?? this.peakMemoryRssMb,
       eventLoopLagMs: eventLoopLagMs ?? this.eventLoopLagMs,
       currentRoute: currentRoute ?? this.currentRoute,

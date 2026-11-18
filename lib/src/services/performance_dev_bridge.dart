@@ -10,10 +10,13 @@ import 'rebuild_tracker.dart';
 /// Mini servidor HTTP local para expor telemetria de performance em tempo real
 /// para agentes de IA (via MCP), DevTools e ferramentas de inspeção.
 class PerformanceDevBridge {
+  static final Map<int, HttpServer> _activeServersByPort = {};
+
   final int port;
   final PerformanceMonitorService monitorService;
 
   HttpServer? _server;
+  bool _wantRunning = false;
   final DateTime _startedAt = DateTime.now();
 
   bool get isRunning => _server != null;
@@ -25,25 +28,42 @@ class PerformanceDevBridge {
 
   /// Inicia o servidor HTTP local na porta configurada.
   Future<void> start() async {
-    if (kIsWeb || _server != null) return;
+    if (kIsWeb || _server != null || _wantRunning) return;
+    _wantRunning = true;
 
     try {
-      _server = await HttpServer.bind(
+      await _activeServersByPort.remove(port)?.close(force: true);
+      if (!_wantRunning) return;
+
+      final server = await HttpServer.bind(
         InternetAddress.loopbackIPv4,
         port,
         shared: true,
       );
-      _server!.listen(_handleRequest);
+      if (!_wantRunning) {
+        await server.close(force: true);
+        return;
+      }
+
+      _server = server;
+      _activeServersByPort[port] = server;
+      server.listen(_handleRequest);
       debugPrint('[PerformanceDevBridge] Servidor de telemetria ativo em http://127.0.0.1:$port');
     } catch (e) {
+      _wantRunning = false;
       debugPrint('[PerformanceDevBridge] Não foi possível iniciar na porta $port: $e');
     }
   }
 
   /// Para o servidor HTTP.
   Future<void> stop() async {
-    await _server?.close(force: true);
+    _wantRunning = false;
+    final server = _server;
     _server = null;
+    if (server != null && identical(_activeServersByPort[port], server)) {
+      _activeServersByPort.remove(port);
+    }
+    await server?.close(force: true);
   }
 
   void _handleRequest(HttpRequest request) async {

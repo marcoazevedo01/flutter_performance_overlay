@@ -7,7 +7,7 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
-## [Unreleased]
+## [0.1.6] - 2026-11-18
 
 ### Adicionado
 - **Streaming Remoto Contínuo em Modo Headless (`startStreaming` / `stopStreaming`)**:
@@ -16,6 +16,14 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
   - Interceptação encadeada e reversível de `debugPrint`, `FlutterError.onError` e `PlatformDispatcher.instance.onError`, mantendo os handlers originais do app intactos após o encerramento.
 - **Proteção de Sessão Headless no `PerformanceOverlayWidget`**:
   - Ocultar o overlay (`enabled: false`) não interrompe mais uma sessão de streaming remoto em andamento (`isStreaming`).
+- **Delta de Memória da Sessão (`sessionDeltaMemoryMb` / `ΔSessão`)**:
+  - Persistência do baseline inicial de memória por processo (`pid` em arquivo temporário com cache em RAM no IO e `window.__fpoBaselineMemoryMb` na Web), sobrevivendo a ciclos de *Hot Reload* e *Hot Restart*.
+  - Novo badge `ΔSessão` no painel expandido do `PerformanceOverlayWidget` e serialização de `sessionDeltaMemoryMb` em `PerformanceData.toJson()`.
+  - Nova regra em `PerformanceDiagnostics` para alertar sobre acúmulo contínuo de memória na sessão (`> 30MB` aviso, `> 100MB` crítico), com redefinição do baseline integrada ao `clearHistory()`.
+
+### Corrigido
+- **Fechamento de Socket Órfão no `PerformanceDevBridge`**:
+  - Rastreamento ativo de servidores por porta para encerrar instâncias HTTP anteriores antes de um novo `HttpServer.bind`, evitando retenção de objetos após *Hot Restart*.
 
 ---
 

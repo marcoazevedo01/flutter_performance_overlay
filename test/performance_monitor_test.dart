@@ -19,6 +19,7 @@ void main() {
       expect(data.memoryRssMb, 0.0);
       expect(data.deltaMemoryRssMb, 0.0);
       expect(data.routeDeltaMemoryMb, 0.0);
+      expect(data.sessionDeltaMemoryMb, 0.0);
       expect(data.peakMemoryRssMb, 0.0);
       expect(data.eventLoopLagMs, 0.0);
       expect(data.currentRoute, '/');
@@ -38,6 +39,7 @@ void main() {
         memoryRssMb: 45.678,
         deltaMemoryRssMb: 1.234,
         routeDeltaMemoryMb: 5.678,
+        sessionDeltaMemoryMb: 18.456,
         peakMemoryRssMb: 80.123,
         eventLoopLagMs: 12.34,
         currentRoute: '/detalhes',
@@ -55,6 +57,7 @@ void main() {
       expect(json['memoryRssMb'], 45.68);
       expect(json['deltaMemoryRssMb'], 1.23);
       expect(json['routeDeltaMemoryMb'], 5.68);
+      expect(json['sessionDeltaMemoryMb'], 18.46);
       expect(json['peakMemoryRssMb'], 80.12);
       expect(json['eventLoopLagMs'], 12.3);
       expect(json['currentRoute'], '/detalhes');
@@ -101,6 +104,7 @@ void main() {
         currentFps: 45.0,
         memoryRssMb: 100.5,
         deltaMemoryRssMb: 2.5,
+        sessionDeltaMemoryMb: 35.5,
         currentRoute: '/login',
         rebuildCount: 10,
       );
@@ -108,6 +112,7 @@ void main() {
       expect(updated.currentFps, 45.0);
       expect(updated.memoryRssMb, 100.5);
       expect(updated.deltaMemoryRssMb, 2.5);
+      expect(updated.sessionDeltaMemoryMb, 35.5);
       expect(updated.currentRoute, '/login');
       expect(updated.rebuildCount, 10);
       expect(updated.averageFps, initial.averageFps);
@@ -277,6 +282,26 @@ void main() {
       expect(identical(debugPrint, stubDebugPrint), isTrue);
       expect(identical(FlutterError.onError, stubFlutterError), isTrue);
       expect(identical(PlatformDispatcher.instance.onError, originalPlatformError), isTrue);
+    });
+
+    test('Process baseline memory persists across Hot Restart simulation and resets on clearHistory', () {
+      addTearDown(() => resetProcessBaselineMemoryMb());
+
+      resetProcessBaselineMemoryMb(100.0);
+      expect(getOrSetProcessBaselineMemoryMb(140.0), 100.0);
+
+      resetProcessBaselineMemoryMb(140.0);
+      expect(getOrSetProcessBaselineMemoryMb(150.0), 140.0);
+
+      final service = PerformanceMonitorService(enableDevBridge: false);
+      addTearDown(service.dispose);
+      resetProcessBaselineMemoryMb(1.0);
+      service.clearHistory();
+      if (getPlatformMemoryMb() != null) {
+        final afterClear = getOrSetProcessBaselineMemoryMb(999.0);
+        expect(afterClear, isNot(1.0));
+        expect(afterClear, isNot(999.0));
+      }
     });
   });
 }

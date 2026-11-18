@@ -71,6 +71,7 @@ class PerformanceMonitorService {
   String _lastObservedRoute = '';
   double _memoryOnRouteEntryMb = -1.0;
   double _routeDeltaMemoryMb = 0.0;
+  double _sessionDeltaMemoryMb = 0.0;
   DateTime? _routeEnteredAt;
   double _routeMountDurationMs = 0.0;
   double _worstFrameInCurrentRoute = 0.0;
@@ -225,6 +226,13 @@ class PerformanceMonitorService {
   void clearHistory() {
     _history.clear();
     _routeHistory.clear();
+    final currentMem = getPlatformMemoryMb();
+    resetProcessBaselineMemoryMb(currentMem);
+    _sessionDeltaMemoryMb = 0.0;
+    if (currentMem != null) {
+      _memoryOnRouteEntryMb = currentMem;
+      _routeDeltaMemoryMb = 0.0;
+    }
   }
 
   void _onReportTimings(List<FrameTiming> timings) {
@@ -248,6 +256,9 @@ class PerformanceMonitorService {
     final double currentMemoryMb = platformMemory ?? -1.0;
     double deltaMemoryMb = 0.0;
     if (platformMemory != null) {
+      final baselineMb = getOrSetProcessBaselineMemoryMb(currentMemoryMb);
+      _sessionDeltaMemoryMb = currentMemoryMb - baselineMb;
+
       // Rastreamento por rota e tempo de carga da tela
       if (currentRoute != _lastObservedRoute) {
         if (_lastObservedRoute.isNotEmpty) {
@@ -311,6 +322,7 @@ class PerformanceMonitorService {
         memoryRssMb: currentMemoryMb,
         deltaMemoryRssMb: deltaMemoryMb,
         routeDeltaMemoryMb: _routeDeltaMemoryMb,
+        sessionDeltaMemoryMb: _sessionDeltaMemoryMb,
         peakMemoryRssMb: _peakMemoryRssMb,
         eventLoopLagMs: _lagDetector.currentLagMs,
         currentRoute: currentRoute,
@@ -375,6 +387,7 @@ class PerformanceMonitorService {
       memoryRssMb: currentMemoryMb,
       deltaMemoryRssMb: deltaMemoryMb,
       routeDeltaMemoryMb: _routeDeltaMemoryMb,
+      sessionDeltaMemoryMb: _sessionDeltaMemoryMb,
       peakMemoryRssMb: _peakMemoryRssMb,
       eventLoopLagMs: _lagDetector.currentLagMs,
       currentRoute: currentRoute,

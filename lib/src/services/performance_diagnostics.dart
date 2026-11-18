@@ -141,6 +141,21 @@ class PerformanceDiagnostics {
       );
     }
 
+    if (currentData.memoryRssMb >= 0 && currentData.sessionDeltaMemoryMb > 30.0) {
+      issues.add(
+        DiagnosticIssue(
+          title: 'Acúmulo Contínuo de Memória na Sessão (Hot Restart / Leak)',
+          description:
+              'A memória subiu +${currentData.sessionDeltaMemoryMb.toStringAsFixed(1)}MB desde o início do processo (Atual: ${currentData.memoryRssMb.toStringAsFixed(1)}MB).',
+          severity: currentData.sessionDeltaMemoryMb > 100.0
+              ? DiagnosticSeverity.critical
+              : DiagnosticSeverity.warning,
+          suggestion:
+              'Verifique retenção acumulada em ciclos de Hot Reload/Restart, caches estáticos ou recursos nativos/Web fora do Isolate.',
+        ),
+      );
+    }
+
     if (currentData.memoryRssMb > 1000.0) {
       issues.add(
         DiagnosticIssue(

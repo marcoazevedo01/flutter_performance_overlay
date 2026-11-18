@@ -65,6 +65,7 @@ void main() {
       expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'Event Loop Freeze'), findsOneWidget);
       expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'ΔRAM'), findsOneWidget);
       expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'ΔRota'), findsOneWidget);
+      expect(find.byWidgetPredicate((w) => w is MetricBadge && w.label == 'ΔSessão'), findsOneWidget);
 
       // Tap novamente para compactar
       await tester.tap(find.byType(GestureDetector));
