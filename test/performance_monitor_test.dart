@@ -195,6 +195,7 @@ void main() {
       final service = PerformanceMonitorService(
         enableDevBridge: false,
         refreshInterval: const Duration(milliseconds: 20),
+        appName: 'SupraHelpTest',
       );
 
       addTearDown(() {
@@ -232,6 +233,8 @@ void main() {
 
       final firstChunk = chunks[0];
       expect(firstChunk['timestamp'], isA<String>());
+      expect(firstChunk['appName'], 'SupraHelpTest');
+      expect(firstChunk['instanceId'], service.instanceId);
       expect(firstChunk['currentMetrics'], isA<Map<String, dynamic>>());
       expect(firstChunk['samples'], isA<List>());
       expect((firstChunk['samples'] as List), isNotEmpty);

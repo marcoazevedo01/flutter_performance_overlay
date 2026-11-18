@@ -43,6 +43,12 @@ class PerformanceMonitorService {
   /// Porta para o servidor local DevBridge.
   final int devBridgePort;
 
+  /// Nome da aplicação que hospeda o monitor (útil em painéis multi-app).
+  final String appName;
+
+  /// Identificador único desta instância em execução.
+  late final String instanceId;
+
   final Queue<FrameTiming> _frameTimings = Queue<FrameTiming>();
   final List<PerformanceData> _history = [];
 
@@ -104,7 +110,11 @@ class PerformanceMonitorService {
     this.enableDevBridge = true,
     this.enableServiceExtensions = true,
     this.devBridgePort = 8765,
+    this.appName = 'FlutterApp',
+    String? instanceId,
   }) {
+    this.instanceId = instanceId ??
+        '${DateTime.now().microsecondsSinceEpoch}_${identityHashCode(this)}';
     _lagDetector = EventLoopLagDetector(
       interval: const Duration(milliseconds: 200),
     );
@@ -505,6 +515,8 @@ class PerformanceMonitorService {
 
     final chunk = <String, dynamic>{
       'timestamp': DateTime.now().toIso8601String(),
+      'appName': appName,
+      'instanceId': instanceId,
       'currentMetrics': _lastData.toJson(),
       'samples': _pendingSamples.map((e) => e.toJson()).toList(),
       'diagnostics': PerformanceDiagnostics.analyze(
