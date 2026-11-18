@@ -7,6 +7,20 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [0.1.7] - 2026-11-18
+
+### Adicionado
+- **Relay WebSocket Remoto Multiplataforma (`PerformanceRemoteRelay`)**:
+  - Cliente WebSocket nativo (`dart:io` e `dart:js_interop` na Web) sem dependências externas, com modo passivo para apps (`register`, `start`, `stop`, `chunk`) e modo `isInspector: true` para painéis de suporte (`list`, `start_target`, `stop_target`).
+  - Configuração opcional em `PerformanceOverlayConfig` e `PerformanceMonitorService` (`remoteRelayUrl`, `remoteRelayKey`, `appName`, `userName`, `deviceName`, `appVersion`) sem URLs ou chaves hardcoded.
+- **Auto-detecção de `appName` e `deviceName`**:
+  - Inferência automática por plataforma (executável/SO/hostname no IO e `document.title` na Web) e inclusão de `appName` e `instanceId` nos chunks de streaming.
+- **DevBridge Multi-Porta e Rotas de Streaming Local**:
+  - Bind automático na primeira porta livre de `127.0.0.1:8765..8774` (`shared: false`) para coexistência de múltiplos apps na mesma máquina.
+  - Novos endpoints `/stream/start`, `/stream/stop`, `/stream/chunk` e metadados expandidos no `/health`.
+
+---
+
 ## [0.1.6] - 2026-11-18
 
 ### Adicionado
