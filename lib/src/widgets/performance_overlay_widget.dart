@@ -47,7 +47,16 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
       _service = widget.monitorService!;
       _ownsService = false;
     } else {
-      _service = PerformanceMonitorService();
+      _service = PerformanceMonitorService(
+        enableDevBridge: widget.config.enableDevBridge,
+        devBridgePort: widget.config.devBridgePort,
+        appName: widget.config.appName ?? 'FlutterApp',
+        userName: widget.config.userName,
+        deviceName: widget.config.deviceName,
+        appVersion: widget.config.appVersion,
+        remoteRelayUrl: widget.config.remoteRelayUrl,
+        remoteRelayKey: widget.config.remoteRelayKey,
+      );
       _ownsService = true;
     }
 

@@ -1,4 +1,4 @@
-import 'dart:io' show Directory, File, ProcessInfo, pid;
+import 'dart:io' show Directory, File, Platform, ProcessInfo, pid;
 
 double? _cachedBaselineMb;
 
@@ -11,6 +11,29 @@ double? getPlatformMemoryMb() {
     return ProcessInfo.currentRss / (1024 * 1024);
   } catch (_) {
     return null;
+  }
+}
+
+/// Tenta inferir o nome do aplicativo a partir do executável ou diretório atual.
+String getPlatformAppName() {
+  try {
+    final exe = Platform.resolvedExecutable.split(RegExp(r'[/\\]')).last;
+    final clean = exe.replaceAll(RegExp(r'\.exe$', caseSensitive: false), '');
+    if (clean.isNotEmpty && clean.toLowerCase() != 'flutter_tester') {
+      return clean;
+    }
+    return Directory.current.path.split(RegExp(r'[/\\]')).last;
+  } catch (_) {
+    return 'FlutterApp';
+  }
+}
+
+/// Retorna o sistema operacional e hostname local.
+String getPlatformDeviceName() {
+  try {
+    return '${Platform.operatingSystem} (${Platform.localHostname})';
+  } catch (_) {
+    return 'Native';
   }
 }
 

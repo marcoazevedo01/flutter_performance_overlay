@@ -14,6 +14,7 @@ import 'performance_dev_bridge.dart';
 import 'performance_diagnostics.dart';
 import 'performance_service_extensions.dart';
 import 'rebuild_tracker.dart';
+import 'remote_relay/remote_relay.dart';
 import 'route_observer.dart';
 import 'telemetry_bridge/telemetry_bridge.dart';
 
@@ -49,6 +50,27 @@ class PerformanceMonitorService {
   /// Identificador único desta instância em execução.
   late final String instanceId;
 
+  /// Nome opcional do usuário ativo no aplicativo.
+  final String? userName;
+
+  /// Nome opcional do dispositivo.
+  final String? deviceName;
+
+  /// Versão opcional do aplicativo hospedeiro.
+  final String? appVersion;
+
+  /// URL WebSocket opcional de relay remoto privado.
+  final String? remoteRelayUrl;
+
+  /// Chave de autenticação opcional para o relay remoto.
+  final String? remoteRelayKey;
+
+  String get effectiveAppName =>
+      (appName != 'FlutterApp' && appName.isNotEmpty) ? appName : getPlatformAppName();
+
+  String get effectiveDeviceName =>
+      (deviceName != null && deviceName!.isNotEmpty) ? deviceName! : getPlatformDeviceName();
+
   final Queue<FrameTiming> _frameTimings = Queue<FrameTiming>();
   final List<PerformanceData> _history = [];
 
@@ -58,6 +80,7 @@ class PerformanceMonitorService {
   late final EventLoopLagDetector _lagDetector;
   PerformanceDevBridge? _devBridge;
   PerformanceServiceExtensions? _serviceExtensions;
+  PerformanceRemoteRelay? _remoteRelay;
 
   bool _startedByStreaming = false;
   bool _hooksInstalled = false;
@@ -112,6 +135,11 @@ class PerformanceMonitorService {
     this.devBridgePort = 8765,
     this.appName = 'FlutterApp',
     String? instanceId,
+    this.userName,
+    this.deviceName,
+    this.appVersion,
+    this.remoteRelayUrl,
+    this.remoteRelayKey,
   }) {
     this.instanceId = instanceId ??
         '${DateTime.now().microsecondsSinceEpoch}_${identityHashCode(this)}';
@@ -123,13 +151,21 @@ class PerformanceMonitorService {
       _devBridge = PerformanceDevBridge(
         port: devBridgePort,
         monitorService: this,
-      );
+      )..start();
     }
 
     if (enableServiceExtensions && !kIsWeb) {
       _serviceExtensions = PerformanceServiceExtensions(
         monitorService: this,
       );
+    }
+
+    if (remoteRelayUrl != null && remoteRelayUrl!.isNotEmpty) {
+      _remoteRelay = PerformanceRemoteRelay(
+        relayUrl: remoteRelayUrl!,
+        relayKey: remoteRelayKey,
+        monitorService: this,
+      )..connect();
     }
   }
 
@@ -505,6 +541,9 @@ class PerformanceMonitorService {
     _hooksInstalled = false;
   }
 
+  /// Constrói e drena um chunk sob demanda (usado pelo bridge local/streaming).
+  Map<String, dynamic> buildCurrentChunk() => _buildAndDrainChunk();
+
   Map<String, dynamic> _buildAndDrainChunk() {
     if (_pendingSamples.isEmpty) {
       _computeMetrics();
@@ -515,7 +554,7 @@ class PerformanceMonitorService {
 
     final chunk = <String, dynamic>{
       'timestamp': DateTime.now().toIso8601String(),
-      'appName': appName,
+      'appName': effectiveAppName,
       'instanceId': instanceId,
       'currentMetrics': _lastData.toJson(),
       'samples': _pendingSamples.map((e) => e.toJson()).toList(),
@@ -553,6 +592,7 @@ class PerformanceMonitorService {
     _frameTimings.clear();
     _history.clear();
     _serviceExtensions?.unregister();
+    _remoteRelay?.dispose();
     _devBridge?.dispose();
   }
 }

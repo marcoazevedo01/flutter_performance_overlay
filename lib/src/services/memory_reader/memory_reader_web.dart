@@ -1,5 +1,8 @@
 import 'dart:js_interop';
 
+@JS('document.title')
+external String? get _documentTitle;
+
 @JS('window.performance.memory.usedJSHeapSize')
 external num? get _usedJSHeapSize;
 
@@ -33,6 +36,18 @@ double? getPlatformMemoryMb() {
   } catch (_) {}
   return null;
 }
+
+/// Retorna o título do documento HTML ou fallback para identificar o app Web.
+String getPlatformAppName() {
+  try {
+    final title = _documentTitle?.trim();
+    if (title != null && title.isNotEmpty) return title;
+  } catch (_) {}
+  return 'FlutterWeb';
+}
+
+/// Identifica a plataforma como navegador Web.
+String getPlatformDeviceName() => 'Web Browser';
 
 /// Obtém ou define o baseline inicial de memória no objeto global `window` (sobrevive ao Hot Restart do DDC).
 double getOrSetProcessBaselineMemoryMb(double currentMb) {

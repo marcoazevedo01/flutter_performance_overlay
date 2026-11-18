@@ -16,42 +16,51 @@ class PerformanceDevBridge {
   final PerformanceMonitorService monitorService;
 
   HttpServer? _server;
+  int _activePort = 8765;
   bool _wantRunning = false;
+  Map<String, dynamic>? _lastStreamChunk;
   final DateTime _startedAt = DateTime.now();
 
   bool get isRunning => _server != null;
+  int get activePort => _activePort;
 
   PerformanceDevBridge({
     this.port = 8765,
     required this.monitorService,
-  });
+  }) : _activePort = port;
 
-  /// Inicia o servidor HTTP local na porta configurada.
+  /// Inicia o servidor HTTP local na primeira porta livre no intervalo [port..port+9].
   Future<void> start() async {
     if (kIsWeb || _server != null || _wantRunning) return;
     _wantRunning = true;
 
-    try {
-      await _activeServersByPort.remove(port)?.close(force: true);
-      if (!_wantRunning) return;
+    for (int candidatePort = port; candidatePort <= port + 9; candidatePort++) {
+      try {
+        await _activeServersByPort.remove(candidatePort)?.close(force: true);
+        if (!_wantRunning) return;
 
-      final server = await HttpServer.bind(
-        InternetAddress.loopbackIPv4,
-        port,
-        shared: true,
-      );
-      if (!_wantRunning) {
-        await server.close(force: true);
+        final server = await HttpServer.bind(
+          InternetAddress.loopbackIPv4,
+          candidatePort,
+          shared: false,
+        );
+        if (!_wantRunning) {
+          await server.close(force: true);
+          return;
+        }
+
+        _activePort = candidatePort;
+        _server = server;
+        _activeServersByPort[candidatePort] = server;
+        server.listen(_handleRequest);
+        debugPrint('[PerformanceDevBridge] Servidor de telemetria ativo em http://127.0.0.1:$candidatePort');
         return;
+      } catch (e) {
+        if (candidatePort == port + 9) {
+          _wantRunning = false;
+          debugPrint('[PerformanceDevBridge] Não foi possível iniciar entre portas $port..${port + 9}: $e');
+        }
       }
-
-      _server = server;
-      _activeServersByPort[port] = server;
-      server.listen(_handleRequest);
-      debugPrint('[PerformanceDevBridge] Servidor de telemetria ativo em http://127.0.0.1:$port');
-    } catch (e) {
-      _wantRunning = false;
-      debugPrint('[PerformanceDevBridge] Não foi possível iniciar na porta $port: $e');
     }
   }
 
@@ -60,8 +69,8 @@ class PerformanceDevBridge {
     _wantRunning = false;
     final server = _server;
     _server = null;
-    if (server != null && identical(_activeServersByPort[port], server)) {
-      _activeServersByPort.remove(port);
+    if (server != null && identical(_activeServersByPort[_activePort], server)) {
+      _activeServersByPort.remove(_activePort);
     }
     await server?.close(force: true);
   }
@@ -133,14 +142,48 @@ class PerformanceDevBridge {
           }
           break;
 
+        case '/stream/start':
+          if (request.method == 'POST') {
+            monitorService.startStreaming(
+              interval: const Duration(seconds: 2),
+              onChunk: (chunk) => _lastStreamChunk = chunk,
+            );
+            _sendJson(request, HttpStatus.ok, {'status': 'started'});
+          } else {
+            _sendJson(request, HttpStatus.methodNotAllowed, {'error': 'Utilize método POST'});
+          }
+          break;
+
+        case '/stream/stop':
+          if (request.method == 'POST') {
+            final finalChunk = monitorService.stopStreaming();
+            _lastStreamChunk = null;
+            _sendJson(request, HttpStatus.ok, {'status': 'stopped', 'chunk': finalChunk});
+          } else {
+            _sendJson(request, HttpStatus.methodNotAllowed, {'error': 'Utilize método POST'});
+          }
+          break;
+
+        case '/stream/chunk':
+          final chunk = _lastStreamChunk ?? monitorService.buildCurrentChunk();
+          _lastStreamChunk = null;
+          _sendJson(request, HttpStatus.ok, chunk);
+          break;
+
         case '/health':
         case '/':
           final uptime = DateTime.now().difference(_startedAt).inSeconds;
           _sendJson(request, HttpStatus.ok, {
             'status': 'ok',
-            'port': port,
+            'port': _activePort,
             'uptimeSeconds': uptime,
+            'instanceId': monitorService.instanceId,
+            'appName': monitorService.effectiveAppName,
+            'userName': monitorService.userName,
+            'device': monitorService.effectiveDeviceName,
+            'version': monitorService.appVersion ?? '1.0.0',
             'appRoute': monitorService.lastData.currentRoute,
+            'isStreaming': monitorService.isStreaming,
           });
           break;
 

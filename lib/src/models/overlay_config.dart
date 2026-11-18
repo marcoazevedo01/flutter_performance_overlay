@@ -71,6 +71,24 @@ class PerformanceOverlayConfig {
   /// Tamanho da fonte dos textos de métricas.
   final double fontSize;
 
+  /// Nome da aplicação hospedeira para identificação no monitoramento remoto.
+  final String? appName;
+
+  /// Nome opcional do usuário ativo.
+  final String? userName;
+
+  /// Nome opcional do dispositivo.
+  final String? deviceName;
+
+  /// Versão opcional do aplicativo hospedeiro.
+  final String? appVersion;
+
+  /// URL WebSocket opcional do relay remoto privado.
+  final String? remoteRelayUrl;
+
+  /// Chave de autenticação opcional para o relay remoto privado.
+  final String? remoteRelayKey;
+
   const PerformanceOverlayConfig({
     this.enabled = true,
     this.showFps = true,
@@ -95,6 +113,12 @@ class PerformanceOverlayConfig {
     this.badFpsColor = const Color(0xFFF44336),
     this.backgroundColor = const Color(0xDD1E1E1E),
     this.fontSize = 11.0,
+    this.appName,
+    this.userName,
+    this.deviceName,
+    this.appVersion,
+    this.remoteRelayUrl,
+    this.remoteRelayKey,
   });
 
   PerformanceOverlayConfig copyWith({
@@ -121,6 +145,12 @@ class PerformanceOverlayConfig {
     Color? badFpsColor,
     Color? backgroundColor,
     double? fontSize,
+    String? appName,
+    String? userName,
+    String? deviceName,
+    String? appVersion,
+    String? remoteRelayUrl,
+    String? remoteRelayKey,
   }) {
     return PerformanceOverlayConfig(
       enabled: enabled ?? this.enabled,
@@ -146,6 +176,12 @@ class PerformanceOverlayConfig {
       badFpsColor: badFpsColor ?? this.badFpsColor,
       backgroundColor: backgroundColor ?? this.backgroundColor,
       fontSize: fontSize ?? this.fontSize,
+      appName: appName ?? this.appName,
+      userName: userName ?? this.userName,
+      deviceName: deviceName ?? this.deviceName,
+      appVersion: appVersion ?? this.appVersion,
+      remoteRelayUrl: remoteRelayUrl ?? this.remoteRelayUrl,
+      remoteRelayKey: remoteRelayKey ?? this.remoteRelayKey,
     );
   }
 }
