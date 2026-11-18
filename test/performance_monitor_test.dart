@@ -1,4 +1,6 @@
 import 'dart:async';
+import 'dart:convert';
+import 'dart:io';
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -305,6 +307,93 @@ void main() {
         expect(afterClear, isNot(1.0));
         expect(afterClear, isNot(999.0));
       }
+    });
+
+    test('PerformanceRemoteRelay buffers chunks during disconnect and flushes on reconnect', () async {
+      final prevOverrides = HttpOverrides.current;
+      HttpOverrides.global = null;
+      final server = await HttpServer.bind(InternetAddress.loopbackIPv4, 0);
+
+      final statuses = <RelayConnectionStatus>[];
+      final receivedOnReconnect = <Map<String, dynamic>>[];
+      final reconnectFlushed = Completer<void>();
+      final firstRegistered = Completer<void>();
+      int connectionCount = 0;
+
+      server.listen((req) async {
+        if (!WebSocketTransformer.isUpgradeRequest(req)) {
+          req.response.statusCode = HttpStatus.notFound;
+          await req.response.close();
+          return;
+        }
+        final ws = await WebSocketTransformer.upgrade(req);
+        connectionCount++;
+        final currentConn = connectionCount;
+
+        ws.listen((raw) async {
+          final msg = jsonDecode(raw as String) as Map<String, dynamic>;
+          if (currentConn == 1 && msg['type'] == 'register') {
+            ws.add(jsonEncode({
+              'type': 'start',
+              'requesterId': 'r1',
+              'intervalSec': 1,
+            }));
+            if (!firstRegistered.isCompleted) firstRegistered.complete();
+            await Future.delayed(const Duration(milliseconds: 50));
+            await ws.close();
+          } else if (currentConn >= 2) {
+            receivedOnReconnect.add(msg);
+            if (msg['type'] == 'chunk' && !reconnectFlushed.isCompleted) {
+              reconnectFlushed.complete();
+            }
+          }
+        });
+      });
+
+      final originalDebugPrint = debugPrint;
+      final service = PerformanceMonitorService(
+        enableDevBridge: false,
+        enableServiceExtensions: false,
+        refreshInterval: const Duration(milliseconds: 25),
+      );
+
+      final relay = PerformanceRemoteRelay(
+        relayUrl: 'ws://127.0.0.1:${server.port}/perf-ws',
+        relayKey: 'k1',
+        monitorService: service,
+        reconnectDelay: const Duration(milliseconds: 1250),
+        onStatusChanged: statuses.add,
+      );
+
+      addTearDown(() async {
+        relay.dispose();
+        service.dispose();
+        await server.close(force: true);
+        debugPrint = originalDebugPrint;
+        HttpOverrides.global = prevOverrides;
+      });
+
+      relay.connect();
+      await firstRegistered.future.timeout(const Duration(seconds: 3));
+      await Future.delayed(const Duration(milliseconds: 100));
+
+      // Gera log enquanto o relay está desconectado aguardando reconnectDelay
+      debugPrint('Log durante queda 4G');
+
+      await reconnectFlushed.future.timeout(const Duration(seconds: 5));
+
+      expect(statuses, contains(RelayConnectionStatus.reconnecting));
+      expect(statuses.last, RelayConnectionStatus.connected);
+      expect(
+        receivedOnReconnect.any((m) => m['type'] == 'register'),
+        isTrue,
+      );
+      final flushedChunk = receivedOnReconnect.firstWhere((m) => m['type'] == 'chunk');
+      final logs = (flushedChunk['chunk'] as Map)['logs'] as List;
+      expect(
+        logs.any((l) => (l as Map)['message'] == 'Log durante queda 4G'),
+        isTrue,
+      );
     });
   });
 }

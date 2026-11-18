@@ -3,6 +3,8 @@ import 'dart:convert';
 import 'dart:js_interop';
 import 'dart:js_interop_unsafe';
 
+import 'package:flutter/widgets.dart';
+
 import '../performance_monitor_service.dart';
 import 'remote_relay_protocol.dart';
 
@@ -10,19 +12,22 @@ import 'remote_relay_protocol.dart';
 external JSFunction get _webSocketConstructor;
 
 /// Cliente WebSocket nativo (Browser JS Interop) para relay remoto (modo passivo ou inspector).
-class PerformanceRemoteRelay {
+class PerformanceRemoteRelay with WidgetsBindingObserver {
   final String relayUrl;
   final String? relayKey;
   final PerformanceMonitorService? monitorService;
   final bool isInspector;
+  final Duration reconnectDelay;
   final void Function(List<Map<String, dynamic>> instances)? onInstancesUpdated;
   final void Function(Map<String, dynamic> chunkEvent)? onChunkReceived;
   final void Function(RelayConnectionStatus status)? onStatusChanged;
 
   JSObject? _socket;
   Timer? _reconnectTimer;
+  final List<Map<String, dynamic>> _pendingChunks = [];
   bool _disposed = false;
   bool _hasConnectedBefore = false;
+  bool _observerAttached = false;
   bool _hasPendingList = false;
   String? _pendingListAuthToken;
   RelayConnectionStatus _status = RelayConnectionStatus.disconnected;
@@ -32,6 +37,7 @@ class PerformanceRemoteRelay {
     this.relayKey,
     this.monitorService,
     this.isInspector = false,
+    this.reconnectDelay = const Duration(seconds: 5),
     this.onInstancesUpdated,
     this.onChunkReceived,
     this.onStatusChanged,
@@ -51,8 +57,23 @@ class PerformanceRemoteRelay {
   }
 
   void connect() {
-    if (_disposed || _socket != null) return;
+    if (_disposed) return;
+    if (!_observerAttached) {
+      try {
+        WidgetsBinding.instance.addObserver(this);
+        _observerAttached = true;
+      } catch (_) {}
+    }
+    if (_socket != null) return;
     _tryConnect();
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_disposed && !isConnected) {
+      _reconnectTimer?.cancel();
+      _tryConnect();
+    }
   }
 
   void refreshRegistration() {
@@ -113,6 +134,7 @@ class PerformanceRemoteRelay {
         _setStatus(RelayConnectionStatus.connected);
         if (!isInspector && monitorService != null) {
           _send(RemoteRelayProtocol.buildRegisterPayload(monitorService!));
+          _flushPendingChunks();
         } else if (isInspector && _hasPendingList) {
           _hasPendingList = false;
           _send({'type': 'list', 'authToken': _pendingListAuthToken});
@@ -143,14 +165,35 @@ class PerformanceRemoteRelay {
 
   void _send(Map<String, dynamic> payload) {
     final ws = _socket;
-    if (ws == null) return;
+    if (ws == null) {
+      if (payload['type'] == 'chunk') {
+        RemoteRelayProtocol.enqueueChunk(_pendingChunks, payload);
+      }
+      return;
+    }
     final state = ws['readyState']?.dartify();
     if (state is! num || state.toInt() != 1) {
+      if (payload['type'] == 'chunk') {
+        RemoteRelayProtocol.enqueueChunk(_pendingChunks, payload);
+      }
       return;
     }
     try {
       ws.callMethod('send'.toJS, jsonEncode(payload).toJS);
-    } catch (_) {}
+    } catch (_) {
+      if (payload['type'] == 'chunk') {
+        RemoteRelayProtocol.enqueueChunk(_pendingChunks, payload);
+      }
+    }
+  }
+
+  void _flushPendingChunks() {
+    if (_pendingChunks.isEmpty) return;
+    final items = List<Map<String, dynamic>>.from(_pendingChunks);
+    _pendingChunks.clear();
+    for (final item in items) {
+      _send(item);
+    }
   }
 
   void _onDisconnected() {
@@ -166,13 +209,20 @@ class PerformanceRemoteRelay {
           : RelayConnectionStatus.disconnected,
     );
     _reconnectTimer?.cancel();
-    _reconnectTimer = Timer(const Duration(seconds: 5), _tryConnect);
+    _reconnectTimer = Timer(reconnectDelay, _tryConnect);
   }
 
   void dispose() {
     _disposed = true;
     _reconnectTimer?.cancel();
     _reconnectTimer = null;
+    _pendingChunks.clear();
+    if (_observerAttached) {
+      try {
+        WidgetsBinding.instance.removeObserver(this);
+      } catch (_) {}
+      _observerAttached = false;
+    }
     try {
       _socket?.callMethod('close'.toJS);
     } catch (_) {}

@@ -7,6 +7,16 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [0.1.9] - 2026-11-18
+
+### Adicionado
+- **Resiliência para Redes Móveis (3G/4G Android) no `PerformanceRemoteRelay`**:
+  - `pingInterval` de 15s no WebSocket `dart:io` para detecção rápida de quedas silenciosas em operadoras móveis.
+  - Buffer circular em memória (até 10 chunks pendentes) que retém lotes gerados durante janelas de desconexão e os descarrega automaticamente ao reconectar.
+  - Reconexão imediata ao retornar do background (`AppLifecycleState.resumed`) via `WidgetsBindingObserver`.
+
+---
+
 ## [0.1.8] - 2026-11-18
 
 ### Adicionado

@@ -7,6 +7,14 @@ enum RelayConnectionStatus { disconnected, connecting, connected, reconnecting }
 
 /// Utilitários compartilhados de protocolo para o cliente passivo e o modo inspector do relay remoto.
 abstract final class RemoteRelayProtocol {
+  static void enqueueChunk(List<Map<String, dynamic>> buffer, Map<String, dynamic> payload) {
+    // ponytail: buffer circular de 10 chunks para suportar oscilações 3G/4G sem inflar RAM
+    if (buffer.length >= 10) {
+      buffer.removeAt(0);
+    }
+    buffer.add(payload);
+  }
+
   static Uri buildUri(String relayUrl, String? relayKey) {
     final uri = Uri.parse(relayUrl);
     if (relayKey == null || relayKey.isEmpty) return uri;

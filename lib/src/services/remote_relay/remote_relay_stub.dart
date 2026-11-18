@@ -7,6 +7,7 @@ class PerformanceRemoteRelay {
   final String? relayKey;
   final PerformanceMonitorService? monitorService;
   final bool isInspector;
+  final Duration reconnectDelay;
   final void Function(List<Map<String, dynamic>> instances)? onInstancesUpdated;
   final void Function(Map<String, dynamic> chunkEvent)? onChunkReceived;
   final void Function(RelayConnectionStatus status)? onStatusChanged;
@@ -16,6 +17,7 @@ class PerformanceRemoteRelay {
     this.relayKey,
     this.monitorService,
     this.isInspector = false,
+    this.reconnectDelay = const Duration(seconds: 5),
     this.onInstancesUpdated,
     this.onChunkReceived,
     this.onStatusChanged,

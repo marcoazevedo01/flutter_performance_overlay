@@ -2,15 +2,18 @@ import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
 
+import 'package:flutter/widgets.dart';
+
 import '../performance_monitor_service.dart';
 import 'remote_relay_protocol.dart';
 
 /// Cliente WebSocket nativo (IO) para relay remoto (modo passivo ou painel inspector).
-class PerformanceRemoteRelay {
+class PerformanceRemoteRelay with WidgetsBindingObserver {
   final String relayUrl;
   final String? relayKey;
   final PerformanceMonitorService? monitorService;
   final bool isInspector;
+  final Duration reconnectDelay;
   final void Function(List<Map<String, dynamic>> instances)? onInstancesUpdated;
   final void Function(Map<String, dynamic> chunkEvent)? onChunkReceived;
   final void Function(RelayConnectionStatus status)? onStatusChanged;
@@ -18,9 +21,11 @@ class PerformanceRemoteRelay {
   WebSocket? _socket;
   StreamSubscription<dynamic>? _subscription;
   Timer? _reconnectTimer;
+  final List<Map<String, dynamic>> _pendingChunks = [];
   bool _disposed = false;
   bool _connecting = false;
   bool _hasConnectedBefore = false;
+  bool _observerAttached = false;
   bool _hasPendingList = false;
   String? _pendingListAuthToken;
   RelayConnectionStatus _status = RelayConnectionStatus.disconnected;
@@ -30,6 +35,7 @@ class PerformanceRemoteRelay {
     this.relayKey,
     this.monitorService,
     this.isInspector = false,
+    this.reconnectDelay = const Duration(seconds: 5),
     this.onInstancesUpdated,
     this.onChunkReceived,
     this.onStatusChanged,
@@ -45,8 +51,23 @@ class PerformanceRemoteRelay {
   }
 
   void connect() {
-    if (_disposed || _connecting || _socket != null) return;
+    if (_disposed) return;
+    if (!_observerAttached) {
+      try {
+        WidgetsBinding.instance.addObserver(this);
+        _observerAttached = true;
+      } catch (_) {}
+    }
+    if (_connecting || _socket != null) return;
     unawaited(_tryConnect());
+  }
+
+  @override
+  void didChangeAppLifecycleState(AppLifecycleState state) {
+    if (state == AppLifecycleState.resumed && !_disposed && !isConnected) {
+      _reconnectTimer?.cancel();
+      unawaited(_tryConnect());
+    }
   }
 
   void refreshRegistration() {
@@ -109,12 +130,14 @@ class PerformanceRemoteRelay {
         return;
       }
 
+      ws.pingInterval = const Duration(seconds: 15);
       _socket = ws;
       _hasConnectedBefore = true;
       _setStatus(RelayConnectionStatus.connected);
 
       if (!isInspector && monitorService != null) {
         _send(RemoteRelayProtocol.buildRegisterPayload(monitorService!));
+        _flushPendingChunks();
       } else if (isInspector && _hasPendingList) {
         _hasPendingList = false;
         _send({'type': 'list', 'authToken': _pendingListAuthToken});
@@ -142,10 +165,28 @@ class PerformanceRemoteRelay {
 
   void _send(Map<String, dynamic> payload) {
     final ws = _socket;
-    if (ws == null || ws.readyState != WebSocket.open) return;
+    if (ws == null || ws.readyState != WebSocket.open) {
+      if (payload['type'] == 'chunk') {
+        RemoteRelayProtocol.enqueueChunk(_pendingChunks, payload);
+      }
+      return;
+    }
     try {
       ws.add(jsonEncode(payload));
-    } catch (_) {}
+    } catch (_) {
+      if (payload['type'] == 'chunk') {
+        RemoteRelayProtocol.enqueueChunk(_pendingChunks, payload);
+      }
+    }
+  }
+
+  void _flushPendingChunks() {
+    if (_pendingChunks.isEmpty) return;
+    final items = List<Map<String, dynamic>>.from(_pendingChunks);
+    _pendingChunks.clear();
+    for (final item in items) {
+      _send(item);
+    }
   }
 
   void _onDisconnected() {
@@ -163,8 +204,7 @@ class PerformanceRemoteRelay {
           : RelayConnectionStatus.disconnected,
     );
     _reconnectTimer?.cancel();
-    // ponytail: backoff curto de 5s para recuperação ágil de oscilações
-    _reconnectTimer = Timer(const Duration(seconds: 5), _tryConnect);
+    _reconnectTimer = Timer(reconnectDelay, _tryConnect);
   }
 
   void dispose() {
@@ -173,6 +213,13 @@ class PerformanceRemoteRelay {
     _reconnectTimer = null;
     _subscription?.cancel();
     _subscription = null;
+    _pendingChunks.clear();
+    if (_observerAttached) {
+      try {
+        WidgetsBinding.instance.removeObserver(this);
+      } catch (_) {}
+      _observerAttached = false;
+    }
     try {
       _socket?.close();
     } catch (_) {}
