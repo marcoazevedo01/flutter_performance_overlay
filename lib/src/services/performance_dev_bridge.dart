@@ -160,9 +160,10 @@ class PerformanceDevBridge {
 
         case '/stream/start':
           if (request.method == 'POST') {
+            _lastStreamChunk = null;
             monitorService.startStreaming(
               interval: const Duration(seconds: 2),
-              onChunk: (chunk) => _lastStreamChunk = chunk,
+              onChunk: _mergeStreamChunk,
             );
             _sendJson(request, HttpStatus.ok, {'status': 'started'});
           } else {
@@ -172,7 +173,8 @@ class PerformanceDevBridge {
 
         case '/stream/stop':
           if (request.method == 'POST') {
-            final finalChunk = monitorService.stopStreaming();
+            _mergeStreamChunk(monitorService.stopStreaming());
+            final finalChunk = _lastStreamChunk;
             _lastStreamChunk = null;
             _sendJson(request, HttpStatus.ok, {'status': 'stopped', 'chunk': finalChunk});
           } else {
@@ -219,6 +221,34 @@ class PerformanceDevBridge {
     } catch (e) {
       _sendJson(request, HttpStatus.internalServerError, {'error': e.toString()});
     }
+  }
+
+  void _mergeStreamChunk(Map<String, dynamic> chunk) {
+    final prev = _lastStreamChunk;
+    if (prev == null) {
+      _lastStreamChunk = chunk;
+      return;
+    }
+    _appendCapped(prev, chunk, 'samples', 200);
+    _appendCapped(prev, chunk, 'logs', 200);
+    _appendCapped(prev, chunk, 'errors', 50);
+    _lastStreamChunk = chunk;
+  }
+
+  static void _appendCapped(
+    Map<String, dynamic> prev,
+    Map<String, dynamic> next,
+    String key,
+    int maxItems,
+  ) {
+    final combined = <dynamic>[
+      ...(prev[key] as List? ?? const []),
+      ...(next[key] as List? ?? const []),
+    ];
+    if (combined.length > maxItems) {
+      combined.removeRange(0, combined.length - maxItems);
+    }
+    next[key] = combined;
   }
 
   void _sendJson(HttpRequest request, int statusCode, dynamic data) {

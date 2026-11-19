@@ -109,9 +109,13 @@ class PerformanceMonitorService {
   bool _hooksInstalled = false;
   bool _logsHooked = false;
   bool _errorsHooked = false;
+  bool _inDebugPrint = false;
   DebugPrintCallback? _originalDebugPrint;
+  DebugPrintCallback? _installedDebugPrint;
   FlutterExceptionHandler? _originalFlutterError;
+  FlutterExceptionHandler? _installedFlutterError;
   ErrorCallback? _originalPlatformError;
+  ErrorCallback? _installedPlatformError;
   final List<PerformanceData> _pendingSamples = [];
   final List<Map<String, dynamic>> _capturedLogs = [];
   final List<Map<String, dynamic>> _capturedErrors = [];
@@ -247,6 +251,7 @@ class PerformanceMonitorService {
     _lagDetector.start();
     _devBridge?.start();
     _serviceExtensions?.register();
+    _installHooks(captureLogs: true, captureErrors: true);
 
     _uiRefreshTimer = Timer.periodic(refreshInterval, (_) {
       _computeMetrics();
@@ -306,10 +311,9 @@ class PerformanceMonitorService {
     }
 
     _pendingSamples.clear();
-    _capturedLogs.clear();
-    _capturedErrors.clear();
-
     if (!_isRunning) {
+      _capturedLogs.clear();
+      _capturedErrors.clear();
       _startedByStreaming = true;
       start();
     }
@@ -321,17 +325,20 @@ class PerformanceMonitorService {
     });
   }
 
-  /// Encerra o streaming contínuo, restaura handlers originais e retorna o último lote coletado.
+  /// Encerra o streaming contínuo, restaura handlers se iniciado pelo stream e retorna o último lote coletado.
   Map<String, dynamic> stopStreaming() {
     _streamTimer?.cancel();
     _streamTimer = null;
-    _restoreHooks();
 
     final finalChunk = _buildAndDrainChunk();
 
     if (_startedByStreaming) {
       _startedByStreaming = false;
       stop();
+    } else if (_isRunning) {
+      _installHooks(captureLogs: true, captureErrors: true);
+    } else {
+      _restoreHooks();
     }
 
     return finalChunk;
@@ -539,30 +546,57 @@ class PerformanceMonitorService {
     r'(authorization\s*[:=]\s*(?:basic\s+|bearer\s+)?)([^\s,;}\x22\x27]+)',
     caseSensitive: false,
   );
-  static final _reCpf = RegExp(r'\b\d{3}\.\d{3}\.\d{3}-\d{2}\b');
-  static final _reCnpj = RegExp(r'\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b');
   static final _reQuotedSecret = RegExp(
-    r'([\x22\x27](?:access_?token|refresh_?token|auth_?token|token|senha|password|secret|api_?key|x-perf-key|cpf|cnpj)[\x22\x27]\s*:\s*[\x22\x27])([^\x22\x27]*)([\x22\x27])',
+    r'([\x22\x27](?:access_?token|refresh_?token|auth_?token|token|senha|password|secret|api_?key|x-perf-key)[\x22\x27]\s*:\s*[\x22\x27])([^\x22\x27]*)([\x22\x27])',
     caseSensitive: false,
   );
   static final _rePlainSecret = RegExp(
-    r'(\b(?:access_?token|refresh_?token|auth_?token|token|senha|password|secret|api_?key|x-perf-key|cpf|cnpj)\s*[:=]\s*)(?!\[REDACTED)(?![\x22\x27])([^\s,;\}\]\x22\x27]+)',
+    r'(\b(?:access_?token|refresh_?token|auth_?token|token|senha|password|secret|api_?key|x-perf-key)\s*[:=]\s*)(?!\[REDACTED)(?![\x22\x27])([^\s,;\}\]\x22\x27]+)',
     caseSensitive: false,
   );
 
-  /// Redige credenciais e documentos (CPF/CNPJ) e trunca mensagens longas para envio seguro.
+  /// Redige tokens e senhas (quando [redact] é true) e trunca mensagens longas para envio seguro.
   @visibleForTesting
-  static String sanitizeText(String input) {
-    var out = input.replaceAll(_reBearer, 'Bearer [REDACTED]');
-    out = out.replaceAllMapped(_reAuthHeader, (m) => '${m[1]}[REDACTED]');
-    out = out.replaceAll(_reCpf, '[REDACTED_CPF]');
-    out = out.replaceAll(_reCnpj, '[REDACTED_CNPJ]');
-    out = out.replaceAllMapped(_reQuotedSecret, (m) => '${m[1]}[REDACTED]${m[3]}');
-    out = out.replaceAllMapped(_rePlainSecret, (m) => '${m[1]}[REDACTED]');
+  static String sanitizeText(String input, {bool redact = true}) {
+    var out = input;
+    if (redact) {
+      out = out.replaceAll(_reBearer, 'Bearer [REDACTED]');
+      out = out.replaceAllMapped(_reAuthHeader, (m) => '${m[1]}[REDACTED]');
+      out = out.replaceAllMapped(_reQuotedSecret, (m) => '${m[1]}[REDACTED]${m[3]}');
+      out = out.replaceAllMapped(_rePlainSecret, (m) => '${m[1]}[REDACTED]');
+    }
     if (out.length > 8192) {
       out = '${out.substring(0, 8192)}... [truncated]';
     }
     return out;
+  }
+
+  /// Registra manualmente uma mensagem de log no buffer circular do serviço.
+  void recordLog(String message) {
+    // ponytail: limite de 200 logs por chunk para evitar OOM
+    if (_capturedLogs.length >= 200) {
+      _capturedLogs.removeAt(0);
+    }
+    _capturedLogs.add({
+      'timestamp': DateTime.now().toIso8601String(),
+      'route': PerformanceRouteObserver().currentRoute,
+      'message': sanitizeText(message, redact: sanitizeLogs),
+    });
+  }
+
+  /// Especificação de Zone para capturar chamadas diretas a `print()` sem duplicar `debugPrint()`.
+  ZoneSpecification get logZoneSpecification => ZoneSpecification(
+        print: (self, parent, zone, line) {
+          if (_logsHooked && !_inDebugPrint) {
+            recordLog(line);
+          }
+          parent.print(zone, line);
+        },
+      );
+
+  /// Executa [body] em uma Zone que também captura chamadas diretas a `print()`.
+  R runZonedWithLogCapture<R>(R Function() body) {
+    return runZoned(body, zoneSpecification: logZoneSpecification);
   }
 
   void _installHooks({required bool captureLogs, required bool captureErrors}) {
@@ -571,41 +605,54 @@ class PerformanceMonitorService {
     }
 
     if (captureLogs) {
-      _originalDebugPrint = debugPrint;
+      final previousDebugPrint = debugPrint;
+      _originalDebugPrint = previousDebugPrint;
       _logsHooked = true;
-      debugPrint = (String? message, {int? wrapWidth}) {
-        if (message != null) {
-          // ponytail: limite de 200 logs por chunk para evitar OOM
-          if (_capturedLogs.length >= 200) {
-            _capturedLogs.removeAt(0);
-          }
-          _capturedLogs.add({
-            'timestamp': DateTime.now().toIso8601String(),
-            'route': PerformanceRouteObserver().currentRoute,
-            'message': sanitizeLogs ? sanitizeText(message) : message,
-          });
+      late final DebugPrintCallback wrapper;
+      wrapper = (String? message, {int? wrapWidth}) {
+        if (_logsHooked && message != null) {
+          recordLog(message);
         }
-        _originalDebugPrint?.call(message, wrapWidth: wrapWidth);
+        _inDebugPrint = true;
+        try {
+          previousDebugPrint(message, wrapWidth: wrapWidth);
+        } finally {
+          _inDebugPrint = false;
+        }
       };
+      _installedDebugPrint = wrapper;
+      debugPrint = wrapper;
     }
 
     if (captureErrors) {
-      _originalFlutterError = FlutterError.onError;
-      _originalPlatformError = PlatformDispatcher.instance.onError;
+      final previousFlutterError = FlutterError.onError;
+      final previousPlatformError = PlatformDispatcher.instance.onError;
+      _originalFlutterError = previousFlutterError;
+      _originalPlatformError = previousPlatformError;
       _errorsHooked = true;
 
-      FlutterError.onError = (FlutterErrorDetails details) {
-        _appendError(
-          details.exceptionAsString(),
-          details.stack?.toString() ?? '',
-        );
-        _originalFlutterError?.call(details);
+      late final FlutterExceptionHandler flutterWrapper;
+      flutterWrapper = (FlutterErrorDetails details) {
+        if (_errorsHooked) {
+          _appendError(
+            details.exceptionAsString(),
+            details.stack?.toString() ?? '',
+          );
+        }
+        previousFlutterError?.call(details);
       };
+      _installedFlutterError = flutterWrapper;
+      FlutterError.onError = flutterWrapper;
 
-      PlatformDispatcher.instance.onError = (Object error, StackTrace stack) {
-        _appendError(error.toString(), stack.toString());
-        return _originalPlatformError?.call(error, stack) ?? false;
+      late final ErrorCallback platformWrapper;
+      platformWrapper = (Object error, StackTrace stack) {
+        if (_errorsHooked) {
+          _appendError(error.toString(), stack.toString());
+        }
+        return previousPlatformError?.call(error, stack) ?? false;
       };
+      _installedPlatformError = platformWrapper;
+      PlatformDispatcher.instance.onError = platformWrapper;
     }
 
     _hooksInstalled = _logsHooked || _errorsHooked;
@@ -619,8 +666,8 @@ class PerformanceMonitorService {
     _capturedErrors.add({
       'timestamp': DateTime.now().toIso8601String(),
       'route': PerformanceRouteObserver().currentRoute,
-      'error': sanitizeLogs ? sanitizeText(error) : error,
-      'stackTrace': sanitizeLogs ? sanitizeText(stackTrace) : stackTrace,
+      'error': sanitizeText(error, redact: sanitizeLogs),
+      'stackTrace': sanitizeText(stackTrace, redact: sanitizeLogs),
     });
   }
 
@@ -628,16 +675,25 @@ class PerformanceMonitorService {
     if (!_hooksInstalled) return;
 
     if (_logsHooked) {
-      debugPrint = _originalDebugPrint!;
+      if (identical(debugPrint, _installedDebugPrint) && _originalDebugPrint != null) {
+        debugPrint = _originalDebugPrint!;
+      }
       _originalDebugPrint = null;
+      _installedDebugPrint = null;
       _logsHooked = false;
     }
 
     if (_errorsHooked) {
-      FlutterError.onError = _originalFlutterError;
-      PlatformDispatcher.instance.onError = _originalPlatformError;
+      if (identical(FlutterError.onError, _installedFlutterError)) {
+        FlutterError.onError = _originalFlutterError;
+      }
+      if (identical(PlatformDispatcher.instance.onError, _installedPlatformError)) {
+        PlatformDispatcher.instance.onError = _originalPlatformError;
+      }
       _originalFlutterError = null;
+      _installedFlutterError = null;
       _originalPlatformError = null;
+      _installedPlatformError = null;
       _errorsHooked = false;
     }
 

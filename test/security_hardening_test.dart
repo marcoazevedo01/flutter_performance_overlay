@@ -35,7 +35,7 @@ void main() {
   });
 
   group('Log & Error Sanitization Tests', () {
-    test('sanitizeText redacts bearer tokens, headers, secrets and CPF/CNPJ', () {
+    test('sanitizeText redacts bearer tokens, headers and secrets without redacting CPF/CNPJ', () {
       const sample =
           'GET /api Authorization: Bearer eyJhbGciOi.123.abc-DEF '
           '{"token":"tok123","access_token":"acc123","refresh_token":"ref123",'
@@ -55,16 +55,15 @@ void main() {
       expect(sanitized, isNot(contains('"k1"')));
       expect(sanitized, isNot(contains('abc123')));
       expect(sanitized, isNot(contains('mykey')));
-      expect(sanitized, isNot(contains('123.456.789-00')));
-      expect(sanitized, isNot(contains('12.345.678/0001-99')));
+      expect(sanitized, contains('123.456.789-00'));
+      expect(sanitized, contains('12.345.678/0001-99'));
       expect(sanitized, contains('[REDACTED]'));
-      expect(sanitized, contains('[REDACTED_CPF]'));
-      expect(sanitized, contains('[REDACTED_CNPJ]'));
     });
 
-    test('sanitizeText truncates payloads over 8192 characters', () {
-      final longInput = 'A' * 9000;
-      final sanitized = PerformanceMonitorService.sanitizeText(longInput);
+    test('sanitizeText truncates payloads over 8192 characters even when redact is false', () {
+      final longInput = 'Bearer secretToken ${'A' * 9000}';
+      final sanitized = PerformanceMonitorService.sanitizeText(longInput, redact: false);
+      expect(sanitized, startsWith('Bearer secretToken '));
       expect(sanitized.endsWith('... [truncated]'), isTrue);
       expect(sanitized.length, lessThanOrEqualTo(8192 + '... [truncated]'.length));
     });
@@ -77,16 +76,15 @@ void main() {
       addTearDown(service.dispose);
 
       service.startStreaming(onChunk: (_) {});
-      debugPrint('HTTP header Authorization: Bearer super-secret-jwt cpf 111.222.333-44');
+      debugPrint('HTTP header Authorization: Bearer super-secret-jwt password=minhasenha');
       final finalChunk = service.stopStreaming();
 
       final logs = finalChunk['logs'] as List;
       expect(logs, isNotEmpty);
       final msg = logs.last['message'] as String;
       expect(msg, isNot(contains('super-secret-jwt')));
-      expect(msg, isNot(contains('111.222.333-44')));
+      expect(msg, isNot(contains('minhasenha')));
       expect(msg, contains('[REDACTED]'));
-      expect(msg, contains('[REDACTED_CPF]'));
     });
 
     test('OverlayConfig defaults match hardened security settings', () {

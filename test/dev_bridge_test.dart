@@ -1,5 +1,6 @@
 import 'dart:convert';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:flutter_performance_overlay/flutter_performance_overlay.dart';
 
@@ -180,6 +181,39 @@ void main() {
         final json = jsonDecode(body) as Map<String, dynamic>;
         expect(json.containsKey('status'), isTrue);
         expect(json.containsKey('issues'), isTrue);
+      } finally {
+        client.close();
+      }
+    });
+
+    test('POST /stream/start accumulates logs across unpolled chunk intervals until GET /stream/chunk', () async {
+      final client = HttpClient();
+      try {
+        final startReq = await client.postUrl(Uri.parse('http://127.0.0.1:$testPort/stream/start'));
+        final startRes = await startReq.close();
+        expect(startRes.statusCode, HttpStatus.ok);
+        await startRes.drain<void>();
+
+        debugPrint('DevBridge log ciclo 1');
+        await Future<void>.delayed(const Duration(milliseconds: 2200));
+        debugPrint('DevBridge log ciclo 2');
+        await Future<void>.delayed(const Duration(milliseconds: 2200));
+
+        final chunkReq = await client.getUrl(Uri.parse('http://127.0.0.1:$testPort/stream/chunk'));
+        final chunkRes = await chunkReq.close();
+        expect(chunkRes.statusCode, HttpStatus.ok);
+
+        final body = await chunkRes.transform(utf8.decoder).join();
+        final json = jsonDecode(body) as Map<String, dynamic>;
+        final messages = (json['logs'] as List).map((e) => (e as Map)['message']).toList();
+
+        expect(messages, contains('DevBridge log ciclo 1'));
+        expect(messages, contains('DevBridge log ciclo 2'));
+
+        final stopReq = await client.postUrl(Uri.parse('http://127.0.0.1:$testPort/stream/stop'));
+        final stopRes = await stopReq.close();
+        expect(stopRes.statusCode, HttpStatus.ok);
+        await stopRes.drain<void>();
       } finally {
         client.close();
       }

@@ -90,7 +90,7 @@ class PerformanceOverlayConfig {
   /// Chave de autenticação opcional para o relay remoto privado.
   final String? remoteRelayKey;
 
-  /// Se deve redigir tokens, senhas e documentos (CPF/CNPJ) em logs e erros capturados.
+  /// Se deve redigir tokens, chaves e senhas em logs e erros capturados.
   final bool sanitizeLogs;
 
   const PerformanceOverlayConfig({

@@ -289,6 +289,54 @@ void main() {
       expect(identical(PlatformDispatcher.instance.onError, originalPlatformError), isTrue);
     });
 
+    test('start() captures logs before streaming, runZonedWithLogCapture captures print without duplicating debugPrint, and external debugPrint wrapper is preserved', () {
+      final originalDebugPrint = debugPrint;
+      final externalForwarded = <String?>[];
+      final service = PerformanceMonitorService(
+        enableDevBridge: false,
+        enableServiceExtensions: false,
+      );
+
+      addTearDown(() {
+        service.dispose();
+        debugPrint = originalDebugPrint;
+      });
+
+      service.start();
+      debugPrint('Log antes do stream');
+
+      service.runZonedWithLogCapture(() {
+        print('Log via print direto');
+        debugPrint('Log via debugPrint na zone');
+      });
+
+      final chunk = service.buildCurrentChunk();
+      final messages = (chunk['logs'] as List).map((e) => (e as Map)['message']).toList();
+      expect(messages, contains('Log antes do stream'));
+      expect(messages, contains('Log via print direto'));
+      expect(messages.where((m) => m == 'Log via debugPrint na zone').length, 1);
+
+      // Outra lib sobrescreve debugPrint enquanto serviço está rodando
+      final innerDebugPrint = debugPrint;
+      debugPrint = (String? message, {int? wrapWidth}) {
+        externalForwarded.add(message);
+        innerDebugPrint(message, wrapWidth: wrapWidth);
+      };
+      final externalWrapper = debugPrint;
+
+      service.stop();
+
+      // Não deve desfazer o wrapper externo e nosso hook deve ficar inativo (passthrough)
+      expect(identical(debugPrint, externalWrapper), isTrue);
+      debugPrint('Log apos stop com wrapper externo');
+      expect(externalForwarded, contains('Log apos stop com wrapper externo'));
+      final afterStopChunk = service.buildCurrentChunk();
+      expect(
+        (afterStopChunk['logs'] as List).any((e) => (e as Map)['message'] == 'Log apos stop com wrapper externo'),
+        isFalse,
+      );
+    });
+
     test('Process baseline memory persists across Hot Restart simulation and resets on clearHistory', () {
       addTearDown(() => resetProcessBaselineMemoryMb());
 
