@@ -15,12 +15,19 @@ abstract final class RemoteRelayProtocol {
     buffer.add(payload);
   }
 
-  static Uri buildUri(String relayUrl, String? relayKey) {
-    final uri = Uri.parse(relayUrl);
-    if (relayKey == null || relayKey.isEmpty) return uri;
-    final params = Map<String, String>.from(uri.queryParameters);
-    params['key'] = relayKey;
-    return uri.replace(queryParameters: params);
+  static Uri buildUri(String relayUrl) => Uri.parse(relayUrl);
+
+  static Map<String, dynamic>? buildAuthPayload({
+    String? relayKey,
+    String? authToken,
+  }) {
+    if (authToken != null && authToken.isNotEmpty) {
+      return {'type': 'auth', 'authToken': authToken};
+    }
+    if (relayKey != null && relayKey.isNotEmpty) {
+      return {'type': 'auth', 'key': relayKey};
+    }
+    return null;
   }
 
   static Map<String, dynamic> buildRegisterPayload(PerformanceMonitorService monitor) => {

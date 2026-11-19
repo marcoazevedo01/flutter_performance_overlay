@@ -7,6 +7,20 @@ e este projeto adere ao [Versionamento Semântico](https://semver.org/lang/pt-BR
 
 ---
 
+## [0.2.0] - 2026-11-18
+
+### Segurança e Alterações
+- **Autenticação Segura no `PerformanceRemoteRelay` (`remote_relay_io`, `remote_relay_web`, `remote_relay_protocol`)**:
+  - Removida a anexação de `?key=` na query string da URL WebSocket em `RemoteRelayProtocol.buildUri`.
+  - Autenticação via header HTTP `x-perf-key` (IO) ou frame inicial `{"type": "auth", ...}` via `RemoteRelayProtocol.buildAuthPayload` (suporte a `relayKey` e `authToken`).
+- **Sanitização Automática de Logs e Erros (`sanitizeLogs = true`)**:
+  - Novo parâmetro `sanitizeLogs` em `PerformanceOverlayConfig` e `PerformanceMonitorService` (ativo por padrão) que redige automaticamente `Bearer` tokens, headers `Authorization`, campos sensíveis (`token`, `access_token`, `refresh_token`, `authToken`, `senha`, `password`, `secret`, `apiKey`, `x-perf-key`, `cpf`, `cnpj`) e CPF/CNPJ formatados antes de incluir nos chunks, truncando mensagens acima de `8192` caracteres.
+- **Hardening do `PerformanceDevBridge`**:
+  - Padrão de `enableDevBridge` alterado para `kDebugMode` em `PerformanceOverlayConfig` e `PerformanceMonitorService`.
+  - CORS restrito a origens locais (`http`/`https` em `localhost`, `127.0.0.1` e `::1`), respondendo `403` para origens externas.
+
+---
+
 ## [0.1.9] - 2026-11-18
 
 ### Adicionado

@@ -121,6 +121,27 @@ final finalChunk = monitorService.stopStreaming();
 minhaApi.enviarTelemetria(finalChunk);
 ```
 
+### 4. Relay Remoto Seguro & Sanitização de Logs
+
+Para conectar o app a um relay WebSocket privado (`/perf-ws`) sem expor chaves na URL e com redação automática de credenciais/documentos nos logs (`sanitizeLogs: true` por padrão):
+
+```dart
+const perfRelayKey = String.fromEnvironment('PERF_RELAY_KEY');
+
+PerformanceOverlayWidget(
+  config: PerformanceOverlayConfig(
+    enabled: kDebugMode || kProfileMode,
+    enableDevBridge: kDebugMode, // Restrito a localhost/127.0.0.1
+    sanitizeLogs: true, // Redige Bearer, Authorization, tokens, senhas e CPF/CNPJ
+    remoteRelayUrl: perfRelayKey.isEmpty ? null : 'wss://socket.exemplo.com/perf-ws',
+    remoteRelayKey: perfRelayKey.isEmpty ? null : perfRelayKey,
+  ),
+  child: child!,
+);
+```
+
+> Na Web ou em modo inspetor (`PerformanceRemoteRelay(..., isInspector: true, authToken: jwt)`), a autenticação é enviada no primeiro frame (`{"type": "auth", ...}`), nunca em query string (`?key=`).
+
 ---
 
 ## 🤖 Conectando com Agentes de IA via MCP (Model Context Protocol)

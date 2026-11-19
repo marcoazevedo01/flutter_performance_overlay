@@ -56,6 +56,7 @@ class _PerformanceOverlayWidgetState extends State<PerformanceOverlayWidget> {
         appVersion: widget.config.appVersion,
         remoteRelayUrl: widget.config.remoteRelayUrl,
         remoteRelayKey: widget.config.remoteRelayKey,
+        sanitizeLogs: widget.config.sanitizeLogs,
       );
       _ownsService = true;
     }

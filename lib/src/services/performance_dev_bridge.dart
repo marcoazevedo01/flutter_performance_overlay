@@ -75,12 +75,28 @@ class PerformanceDevBridge {
     await server?.close(force: true);
   }
 
+  static bool _isAllowedLocalOrigin(String origin) {
+    final uri = Uri.tryParse(origin);
+    if (uri == null || !uri.hasScheme) return false;
+    if (uri.scheme != 'http' && uri.scheme != 'https') return false;
+    final host = uri.host.toLowerCase();
+    return host == 'localhost' || host == '127.0.0.1' || host == '::1';
+  }
+
   void _handleRequest(HttpRequest request) async {
-    // Permite chamadas locais e de extensões
-    request.response.headers.add('Access-Control-Allow-Origin', '*');
-    request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
-    request.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
     request.response.headers.contentType = ContentType.json;
+
+    final origin = request.headers.value('origin');
+    if (origin != null) {
+      if (!_isAllowedLocalOrigin(origin)) {
+        _sendJson(request, HttpStatus.forbidden, {'error': 'Origin not allowed'});
+        return;
+      }
+      request.response.headers.add('Access-Control-Allow-Origin', origin);
+      request.response.headers.add('Vary', 'Origin');
+      request.response.headers.add('Access-Control-Allow-Methods', 'GET, POST, OPTIONS');
+      request.response.headers.add('Access-Control-Allow-Headers', 'Content-Type');
+    }
 
     if (request.method == 'OPTIONS') {
       request.response.statusCode = HttpStatus.ok;

@@ -65,6 +65,9 @@ class PerformanceMonitorService {
   /// Chave de autenticação opcional para o relay remoto.
   final String? remoteRelayKey;
 
+  /// Se deve redigir tokens, senhas e documentos em logs/erros antes de armazenar no chunk.
+  final bool sanitizeLogs;
+
   String? _detectedAppName;
   String? _detectedAppVersion;
   String? _detectedUserName;
@@ -150,7 +153,7 @@ class PerformanceMonitorService {
     this.exportInterval = const Duration(seconds: 10),
     this.exportFilePath,
     this.jankThresholdMs = 16.6,
-    this.enableDevBridge = true,
+    this.enableDevBridge = kDebugMode,
     this.enableServiceExtensions = true,
     this.devBridgePort = 8765,
     this.appName = 'FlutterApp',
@@ -160,6 +163,7 @@ class PerformanceMonitorService {
     this.appVersion,
     this.remoteRelayUrl,
     this.remoteRelayKey,
+    this.sanitizeLogs = true,
   }) {
     this.instanceId = instanceId ??
         '${DateTime.now().microsecondsSinceEpoch}_${identityHashCode(this)}';
@@ -527,6 +531,40 @@ class PerformanceMonitorService {
     }
   }
 
+  static final _reBearer = RegExp(
+    r'Bearer\s+[A-Za-z0-9\-._~+/]+=*',
+    caseSensitive: false,
+  );
+  static final _reAuthHeader = RegExp(
+    r'(authorization\s*[:=]\s*(?:basic\s+|bearer\s+)?)([^\s,;}\x22\x27]+)',
+    caseSensitive: false,
+  );
+  static final _reCpf = RegExp(r'\b\d{3}\.\d{3}\.\d{3}-\d{2}\b');
+  static final _reCnpj = RegExp(r'\b\d{2}\.\d{3}\.\d{3}/\d{4}-\d{2}\b');
+  static final _reQuotedSecret = RegExp(
+    r'([\x22\x27](?:access_?token|refresh_?token|auth_?token|token|senha|password|secret|api_?key|x-perf-key|cpf|cnpj)[\x22\x27]\s*:\s*[\x22\x27])([^\x22\x27]*)([\x22\x27])',
+    caseSensitive: false,
+  );
+  static final _rePlainSecret = RegExp(
+    r'(\b(?:access_?token|refresh_?token|auth_?token|token|senha|password|secret|api_?key|x-perf-key|cpf|cnpj)\s*[:=]\s*)(?!\[REDACTED)(?![\x22\x27])([^\s,;\}\]\x22\x27]+)',
+    caseSensitive: false,
+  );
+
+  /// Redige credenciais e documentos (CPF/CNPJ) e trunca mensagens longas para envio seguro.
+  @visibleForTesting
+  static String sanitizeText(String input) {
+    var out = input.replaceAll(_reBearer, 'Bearer [REDACTED]');
+    out = out.replaceAllMapped(_reAuthHeader, (m) => '${m[1]}[REDACTED]');
+    out = out.replaceAll(_reCpf, '[REDACTED_CPF]');
+    out = out.replaceAll(_reCnpj, '[REDACTED_CNPJ]');
+    out = out.replaceAllMapped(_reQuotedSecret, (m) => '${m[1]}[REDACTED]${m[3]}');
+    out = out.replaceAllMapped(_rePlainSecret, (m) => '${m[1]}[REDACTED]');
+    if (out.length > 8192) {
+      out = '${out.substring(0, 8192)}... [truncated]';
+    }
+    return out;
+  }
+
   void _installHooks({required bool captureLogs, required bool captureErrors}) {
     if (_hooksInstalled) {
       _restoreHooks();
@@ -544,7 +582,7 @@ class PerformanceMonitorService {
           _capturedLogs.add({
             'timestamp': DateTime.now().toIso8601String(),
             'route': PerformanceRouteObserver().currentRoute,
-            'message': message,
+            'message': sanitizeLogs ? sanitizeText(message) : message,
           });
         }
         _originalDebugPrint?.call(message, wrapWidth: wrapWidth);
@@ -581,8 +619,8 @@ class PerformanceMonitorService {
     _capturedErrors.add({
       'timestamp': DateTime.now().toIso8601String(),
       'route': PerformanceRouteObserver().currentRoute,
-      'error': error,
-      'stackTrace': stackTrace,
+      'error': sanitizeLogs ? sanitizeText(error) : error,
+      'stackTrace': sanitizeLogs ? sanitizeText(stackTrace) : stackTrace,
     });
   }
 

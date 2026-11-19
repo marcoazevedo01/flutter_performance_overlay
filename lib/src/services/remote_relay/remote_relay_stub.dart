@@ -5,6 +5,7 @@ import 'remote_relay_protocol.dart';
 class PerformanceRemoteRelay {
   final String relayUrl;
   final String? relayKey;
+  final String? authToken;
   final PerformanceMonitorService? monitorService;
   final bool isInspector;
   final Duration reconnectDelay;
@@ -15,6 +16,7 @@ class PerformanceRemoteRelay {
   PerformanceRemoteRelay({
     required this.relayUrl,
     this.relayKey,
+    this.authToken,
     this.monitorService,
     this.isInspector = false,
     this.reconnectDelay = const Duration(seconds: 5),

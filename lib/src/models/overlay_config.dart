@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 
 /// Configuração visual e funcional do overlay de desempenho.
@@ -89,6 +90,9 @@ class PerformanceOverlayConfig {
   /// Chave de autenticação opcional para o relay remoto privado.
   final String? remoteRelayKey;
 
+  /// Se deve redigir tokens, senhas e documentos (CPF/CNPJ) em logs e erros capturados.
+  final bool sanitizeLogs;
+
   const PerformanceOverlayConfig({
     this.enabled = true,
     this.showFps = true,
@@ -102,7 +106,7 @@ class PerformanceOverlayConfig {
     this.showCurrentRoute = true,
     this.showRebuildCount = true,
     this.keepWithinSafeArea = true,
-    this.enableDevBridge = true,
+    this.enableDevBridge = kDebugMode,
     this.devBridgePort = 8765,
     this.initialPosition = const Offset(16, 50),
     this.startExpanded = false,
@@ -119,6 +123,7 @@ class PerformanceOverlayConfig {
     this.appVersion,
     this.remoteRelayUrl,
     this.remoteRelayKey,
+    this.sanitizeLogs = true,
   });
 
   PerformanceOverlayConfig copyWith({
@@ -151,6 +156,7 @@ class PerformanceOverlayConfig {
     String? appVersion,
     String? remoteRelayUrl,
     String? remoteRelayKey,
+    bool? sanitizeLogs,
   }) {
     return PerformanceOverlayConfig(
       enabled: enabled ?? this.enabled,
@@ -182,6 +188,7 @@ class PerformanceOverlayConfig {
       appVersion: appVersion ?? this.appVersion,
       remoteRelayUrl: remoteRelayUrl ?? this.remoteRelayUrl,
       remoteRelayKey: remoteRelayKey ?? this.remoteRelayKey,
+      sanitizeLogs: sanitizeLogs ?? this.sanitizeLogs,
     );
   }
 }

@@ -11,6 +11,7 @@ import 'remote_relay_protocol.dart';
 class PerformanceRemoteRelay with WidgetsBindingObserver {
   final String relayUrl;
   final String? relayKey;
+  final String? authToken;
   final PerformanceMonitorService? monitorService;
   final bool isInspector;
   final Duration reconnectDelay;
@@ -33,6 +34,7 @@ class PerformanceRemoteRelay with WidgetsBindingObserver {
   PerformanceRemoteRelay({
     required this.relayUrl,
     this.relayKey,
+    this.authToken,
     this.monitorService,
     this.isInspector = false,
     this.reconnectDelay = const Duration(seconds: 5),
@@ -119,8 +121,8 @@ class PerformanceRemoteRelay with WidgetsBindingObserver {
           : RelayConnectionStatus.connecting,
     );
     try {
-      final uri = RemoteRelayProtocol.buildUri(relayUrl, relayKey);
-      final headers = (relayKey != null && relayKey!.isNotEmpty)
+      final uri = RemoteRelayProtocol.buildUri(relayUrl);
+      final headers = (!isInspector && relayKey != null && relayKey!.isNotEmpty)
           ? {'x-perf-key': relayKey!}
           : null;
       final ws = await WebSocket.connect(uri.toString(), headers: headers)
@@ -134,6 +136,15 @@ class PerformanceRemoteRelay with WidgetsBindingObserver {
       _socket = ws;
       _hasConnectedBefore = true;
       _setStatus(RelayConnectionStatus.connected);
+
+      if (isInspector) {
+        final authPayload = RemoteRelayProtocol.buildAuthPayload(
+          authToken: authToken ?? _pendingListAuthToken,
+        );
+        if (authPayload != null) {
+          _send(authPayload);
+        }
+      }
 
       if (!isInspector && monitorService != null) {
         _send(RemoteRelayProtocol.buildRegisterPayload(monitorService!));

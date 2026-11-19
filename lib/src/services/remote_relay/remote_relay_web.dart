@@ -15,6 +15,7 @@ external JSFunction get _webSocketConstructor;
 class PerformanceRemoteRelay with WidgetsBindingObserver {
   final String relayUrl;
   final String? relayKey;
+  final String? authToken;
   final PerformanceMonitorService? monitorService;
   final bool isInspector;
   final Duration reconnectDelay;
@@ -35,6 +36,7 @@ class PerformanceRemoteRelay with WidgetsBindingObserver {
   PerformanceRemoteRelay({
     required this.relayUrl,
     this.relayKey,
+    this.authToken,
     this.monitorService,
     this.isInspector = false,
     this.reconnectDelay = const Duration(seconds: 5),
@@ -124,7 +126,7 @@ class PerformanceRemoteRelay with WidgetsBindingObserver {
           : RelayConnectionStatus.connecting,
     );
     try {
-      final uri = RemoteRelayProtocol.buildUri(relayUrl, relayKey);
+      final uri = RemoteRelayProtocol.buildUri(relayUrl);
       final ws = _webSocketConstructor.callAsConstructor<JSObject>(uri.toString().toJS);
       _socket = ws;
 
@@ -132,6 +134,13 @@ class PerformanceRemoteRelay with WidgetsBindingObserver {
         if (_disposed) return;
         _hasConnectedBefore = true;
         _setStatus(RelayConnectionStatus.connected);
+        final authPayload = RemoteRelayProtocol.buildAuthPayload(
+          relayKey: isInspector ? null : relayKey,
+          authToken: isInspector ? (authToken ?? _pendingListAuthToken) : null,
+        );
+        if (authPayload != null) {
+          _send(authPayload);
+        }
         if (!isInspector && monitorService != null) {
           _send(RemoteRelayProtocol.buildRegisterPayload(monitorService!));
           _flushPendingChunks();
